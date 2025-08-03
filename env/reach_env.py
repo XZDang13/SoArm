@@ -48,10 +48,10 @@ class ReachTask(DirectRLEnv):
 
     def _pre_physics_step(self, actions: torch.Tensor):
         self._actions = actions.clone()
-        self._processed_actions = self.cfg.action_scale * self._actions + self.robot.data.default_joint_pos
+        self._joint_target_pos = self.cfg.action_scale * self._actions + self.robot.data.joint_pos
 
     def _apply_action(self):
-        self.robot.set_joint_position_target(self._processed_actions)
+        self.robot.set_joint_position_target(self._joint_target_pos)
 
     def _get_observations(self):
         self._previous_actions = self._actions.clone()
@@ -90,27 +90,24 @@ class ReachTask(DirectRLEnv):
     def sample_pos(self, sample_num:int,
                    x_range:tuple[float, float],
                    y_range:tuple[float, float],
-                   z_range:tuple[float, float]) -> torch.Tensor:
+                   z_range:tuple[float, float]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         pos_x = torch.empty(sample_num, device=self.device).uniform_(x_range[0], x_range[1])
         pos_y = torch.empty(sample_num, device=self.device).uniform_(y_range[0], y_range[1])
         pos_z = torch.empty(sample_num, device=self.device).uniform_(z_range[0], z_range[1])
 
-        pos = torch.stack([pos_x, pos_y, pos_z], dim=-1)
 
-        return pos
+        return pos_x, pos_y, pos_z
     
-    def sample_quat(self, sample_num:int,
+    def sample_euler(self, sample_num:int,
                    x_range:tuple[float, float],
                    y_range:tuple[float, float],
-                   z_range:tuple[float, float]) -> torch.Tensor:
+                   z_range:tuple[float, float]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         
-        rot_x = torch.empty(sample_num, device=self.device).uniform_(x_range[0], x_range[1])
-        rot_y = torch.empty(sample_num, device=self.device).uniform_(y_range[0], y_range[1])
-        rot_z = torch.empty(sample_num, device=self.device).uniform_(z_range[0], z_range[1])
+        euler_x = torch.empty(sample_num, device=self.device).uniform_(x_range[0], x_range[1])
+        euler_y = torch.empty(sample_num, device=self.device).uniform_(y_range[0], y_range[1])
+        euler_z = torch.empty(sample_num, device=self.device).uniform_(z_range[0], z_range[1])
 
-        quat = quat_from_euler_xyz(rot_x, rot_y, rot_z)
-
-        return quat
+        return euler_x, euler_y, euler_z
 
     def set_visual_markers(self, env_ids: torch.Tensor):
         # Transform to world frame
@@ -131,11 +128,18 @@ class ReachTask(DirectRLEnv):
         self.jaw_marker.visualize(self.jaw_goal_pos_world, self.jaw_gola_quat_world)
 
     def sample_end_effector_target(self, env_ids: torch.Tensor):
-        self.gripper_goal_pos_local[env_ids] = self.sample_pos(len(env_ids), [0.1, 0.3], [-0.2, 0.2], [0.1, 0.35])
+        pos_x, pos_y, pos_z = self.sample_pos(len(env_ids), [0.1, 0.3], [-0.2, 0.2], [0.1, 0.35])
 
-        self.gripper_goal_quat_local[env_ids] = self.sample_quat(len(env_ids), [-torch.pi, torch.pi], [0.0, (torch.pi /2)], [0.0, 0.0])
+        self.gripper_goal_pos_local[env_ids] = torch.stack([pos_x, pos_y, pos_z], dim=-1)
 
-        self.jaw_gola_quat_local[env_ids] = self.sample_quat(len(env_ids), [0.0, 0.0], [-torch.pi/2, 0.0], [0.0, 0.0])
+        gripper_euler_x, gripper_euler_y, _ = self.sample_euler(len(env_ids), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0))
+        gripper_euler_z = torch.atan2(pos_y, pos_x)
+
+        self.gripper_goal_quat_local[env_ids] = quat_from_euler_xyz(gripper_euler_x, gripper_euler_y, gripper_euler_z)
+
+        jaw_euler_x, jaw_euler_y, jaw_euler_z = self.sample_euler(len(env_ids), (0.0, 0.0), (-torch.pi/2, 0.0), (0.0, 0.0))
+
+        self.jaw_gola_quat_local[env_ids] = quat_from_euler_xyz(jaw_euler_x, jaw_euler_y, jaw_euler_z)
 
         self.set_visual_markers(env_ids)
 

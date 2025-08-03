@@ -41,7 +41,7 @@ class Trainer:
 
         for i in range(1000):
             #action = self.get_action(obs_dict) 
-            action = torch.rand(12, 6, device=self.device) * 10
+            action = torch.randn(12, 6, device=self.device)
             next_obs_dict, reward, terminate, timeout, info = self.env.step(action)
             done = terminate | timeout
 
