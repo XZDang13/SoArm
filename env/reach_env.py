@@ -5,7 +5,8 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
 from isaaclab.markers import VisualizationMarkers
 from isaaclab.envs import DirectRLEnv
-from isaaclab.utils.math import combine_frame_transforms, quat_from_euler_xyz
+from isaaclab.utils.math import combine_frame_transforms, quat_from_euler_xyz, quat_error_magnitude, euler_xyz_from_quat
+
 
 from .reach_cfg import REACH_TASK_CFG
 
@@ -27,7 +28,7 @@ class ReachTask(DirectRLEnv):
         self.gripper_goal_quat_world = torch.zeros_like(self.gripper_goal_quat_local, device=self.device)
         self.jaw_gola_quat_world = torch.zeros_like(self.gripper_goal_quat_world, device=self.device)
 
-        self.gripper_jaw_offset = torch.as_tensor([0.0234, 0.0, 0.0211], device=self.device)
+        self.gripper_jaw_offset = torch.as_tensor([0.0234, 0.0, -0.0211], device=self.device)
 
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot)
@@ -58,20 +59,40 @@ class ReachTask(DirectRLEnv):
 
         joint_pos = self.robot.data.joint_pos - self.robot.data.default_joint_pos
         joint_vel = self.robot.data.joint_vel               
-        previous_actions = self._previous_actions           
-        
+        previous_actions = self._previous_actions             
 
         obs = torch.cat([
-            joint_pos,
-            joint_vel,
-            previous_actions,
+            self.gripper_goal_pos_local, #3
+            self.gripper_goal_quat_world, #4
+            self.jaw_gola_quat_world, #4
+            joint_pos, #6
+            joint_vel, #6
+            previous_actions, #6
         ], dim=-1)
 
         return {"policy": obs}
     
     def _get_rewards(self) -> torch.Tensor:
-        return self._get_action_rate_reward()
+        gripper_goal_pos = self.gripper_goal_pos_world
+        gripper_current_pos = self.robot.data.body_link_pos_w[:, 5, :]
 
+        gripper_distance_error = -torch.norm(gripper_goal_pos - gripper_current_pos, p=2, dim=1)
+
+        gripper_goal_quat = self.gripper_goal_quat_world
+        gripper_current_quat = self.robot.data.body_quat_w[:, 5, :]
+        gripper_quat_error = -quat_error_magnitude(gripper_goal_quat, gripper_current_quat)
+
+        jaw_goal_pos = self.jaw_goal_pos_world
+        jaw_current_pos = self.robot.data.body_link_pos_w[:, 6, :]
+        jaw_distance_to_goal = -torch.norm(jaw_goal_pos - jaw_current_pos, p=2, dim=1)
+
+        jaw_goal_quat = self.jaw_gola_quat_world
+        jaw_current_quat = self.robot.data.body_quat_w[:, 6, :]
+        jaw_quat_error = -quat_error_magnitude(jaw_goal_quat, jaw_current_quat)
+
+        reward = gripper_distance_error * 5 + gripper_quat_error + jaw_distance_to_goal + jaw_quat_error
+
+        return reward
 
     def _get_action_rate_reward(self) -> torch.Tensor:
         return torch.sum((self._actions - self._previous_actions) ** 2, dim=1)
@@ -128,16 +149,19 @@ class ReachTask(DirectRLEnv):
         self.jaw_marker.visualize(self.jaw_goal_pos_world, self.jaw_gola_quat_world)
 
     def sample_end_effector_target(self, env_ids: torch.Tensor):
-        pos_x, pos_y, pos_z = self.sample_pos(len(env_ids), [0.1, 0.3], [-0.2, 0.2], [0.1, 0.35])
+        pos_x, pos_y, pos_z = self.sample_pos(len(env_ids), [0.1, 0.3], [0, 0], [0.1, 0.35])
 
         self.gripper_goal_pos_local[env_ids] = torch.stack([pos_x, pos_y, pos_z], dim=-1)
 
-        gripper_euler_x, gripper_euler_y, _ = self.sample_euler(len(env_ids), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0))
+        gripper_euler_x, gripper_euler_y, _ = self.sample_euler(len(env_ids), (-0, 0), (-torch.pi/2, -torch.pi/2), (0.0, 0.0))
         gripper_euler_z = torch.atan2(pos_y, pos_x)
+
+        gripper_euler_x = torch.ones_like(gripper_euler_x)
+
 
         self.gripper_goal_quat_local[env_ids] = quat_from_euler_xyz(gripper_euler_x, gripper_euler_y, gripper_euler_z)
 
-        jaw_euler_x, jaw_euler_y, jaw_euler_z = self.sample_euler(len(env_ids), (0.0, 0.0), (-torch.pi/2, 0.0), (0.0, 0.0))
+        jaw_euler_x, jaw_euler_y, jaw_euler_z = self.sample_euler(len(env_ids), ((torch.pi / 2), (torch.pi / 2)), (-torch.pi/2, 0.0), (0.0, 0.0))
 
         self.jaw_gola_quat_local[env_ids] = quat_from_euler_xyz(jaw_euler_x, jaw_euler_y, jaw_euler_z)
 

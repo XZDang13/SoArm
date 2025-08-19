@@ -12,7 +12,7 @@ from .so_arm_101_cfg import SO_ARM_101_CFG
 class SO_ARM_101_BASE_ENV(DirectRLEnvCfg):
     episode_length_s = 10.0
 
-    decimation = 4
+    decimation = 2
 
     observation_space = 12
     action_space = 6
@@ -21,7 +21,7 @@ class SO_ARM_101_BASE_ENV(DirectRLEnvCfg):
     action_scale = 0.25
 
     sim: SimulationCfg = SimulationCfg(
-        dt=1 / 200,
+        dt=1 / 60,
         render_interval=decimation,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
@@ -47,7 +47,7 @@ class SO_ARM_101_BASE_ENV(DirectRLEnvCfg):
     )
 
     scene:InteractiveSceneCfg = InteractiveSceneCfg(
-        num_envs=12, env_spacing=1.0, replicate_physics=True
+        num_envs=256, env_spacing=1.0, replicate_physics=True
     )
 
     robot:ArticulationCfg = SO_ARM_101_CFG.replace(prim_path="/World/envs/env_.*/Robot")
