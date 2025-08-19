@@ -5,7 +5,7 @@ import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation
 from isaaclab.markers import VisualizationMarkers
 from isaaclab.envs import DirectRLEnv
-from isaaclab.utils.math import combine_frame_transforms, quat_from_euler_xyz, quat_error_magnitude, euler_xyz_from_quat
+from isaaclab.utils.math import combine_frame_transforms, quat_from_euler_xyz, quat_error_magnitude, quat_mul
 
 
 from .reach_cfg import REACH_TASK_CFG
@@ -18,6 +18,10 @@ class ReachTask(DirectRLEnv):
 
         self._actions = torch.zeros(self.num_envs, 6, device=self.device)
         self._previous_actions = torch.zeros(self.num_envs, 6, device=self.device)
+        self._previous_joint_pos = self.robot.data.joint_pos.clone()
+
+        self.gripper_base_quat = torch.as_tensor([ 0.7071,  0.0000, -0.7071,  0.0000], device=self.device)
+        self.jaw_base_quat = torch.as_tensor([0.7071, 0.7071, 0.0000, 0.0000], device=self.device)
 
         self.gripper_goal_pos_local = torch.zeros(self.num_envs, 3, device=self.device)
         self.gripper_goal_pos_world = torch.zeros_like(self.gripper_goal_pos_local, device=self.device)
@@ -57,8 +61,7 @@ class ReachTask(DirectRLEnv):
     def _get_observations(self):
         self._previous_actions = self._actions.clone()
 
-        joint_pos = self.robot.data.joint_pos - self.robot.data.default_joint_pos
-        joint_vel = self.robot.data.joint_vel               
+        joint_pos = self.robot.data.joint_pos              
         previous_actions = self._previous_actions             
 
         obs = torch.cat([
@@ -66,9 +69,11 @@ class ReachTask(DirectRLEnv):
             self.gripper_goal_quat_world, #4
             self.jaw_gola_quat_world, #4
             joint_pos, #6
-            joint_vel, #6
+            self._previous_joint_pos, #6
             previous_actions, #6
         ], dim=-1)
+
+        self._previous_joint_pos = self.robot.data.joint_pos.clone()
 
         return {"policy": obs}
     
@@ -90,7 +95,11 @@ class ReachTask(DirectRLEnv):
         jaw_current_quat = self.robot.data.body_quat_w[:, 6, :]
         jaw_quat_error = -quat_error_magnitude(jaw_goal_quat, jaw_current_quat)
 
-        reward = gripper_distance_error * 5 + gripper_quat_error + jaw_distance_to_goal + jaw_quat_error
+        reward = gripper_distance_error * 5 + gripper_quat_error * 5 + jaw_quat_error
+
+        #print(gripper_current_pos)
+        #print(gripper_goal_pos)
+        #print("-------------")
 
         return reward
 
@@ -116,20 +125,31 @@ class ReachTask(DirectRLEnv):
         pos_y = torch.empty(sample_num, device=self.device).uniform_(y_range[0], y_range[1])
         pos_z = torch.empty(sample_num, device=self.device).uniform_(z_range[0], z_range[1])
 
-
         return pos_x, pos_y, pos_z
     
     def sample_euler(self, sample_num:int,
-                   x_range:tuple[float, float],
-                   y_range:tuple[float, float],
-                   z_range:tuple[float, float]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+                     x_range:tuple[float, float],
+                     y_range:tuple[float, float],
+                     z_range:tuple[float, float]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         
         euler_x = torch.empty(sample_num, device=self.device).uniform_(x_range[0], x_range[1])
         euler_y = torch.empty(sample_num, device=self.device).uniform_(y_range[0], y_range[1])
         euler_z = torch.empty(sample_num, device=self.device).uniform_(z_range[0], z_range[1])
 
         return euler_x, euler_y, euler_z
-
+    
+    def compute_quat(self,
+                     euler_x:torch.Tensor,
+                     euler_y:torch.Tensor,
+                     euler_z:torch.Tensor,
+                     reference_quat:torch.Tensor) -> torch.Tensor:
+        base_quat = quat_from_euler_xyz(euler_x, euler_y, euler_z)
+        if reference_quat is not None:
+            quat = quat_mul(base_quat, reference_quat.expand_as(base_quat))
+            return quat
+        
+        return base_quat
+        
     def set_visual_markers(self, env_ids: torch.Tensor):
         # Transform to world frame
         root_pos = self.robot.data.root_pos_w[env_ids]
@@ -149,21 +169,24 @@ class ReachTask(DirectRLEnv):
         self.jaw_marker.visualize(self.jaw_goal_pos_world, self.jaw_gola_quat_world)
 
     def sample_end_effector_target(self, env_ids: torch.Tensor):
-        pos_x, pos_y, pos_z = self.sample_pos(len(env_ids), [0.1, 0.3], [0, 0], [0.1, 0.35])
+        pos_x, pos_y, pos_z = self.sample_pos(len(env_ids), [0.1, 0.3], [-0.2, 0.2], [0.1, 0.35])
 
         self.gripper_goal_pos_local[env_ids] = torch.stack([pos_x, pos_y, pos_z], dim=-1)
 
-        gripper_euler_x, gripper_euler_y, _ = self.sample_euler(len(env_ids), (-0, 0), (-torch.pi/2, -torch.pi/2), (0.0, 0.0))
+        gripper_euler_x, gripper_euler_y, _ = self.sample_euler(len(env_ids), (-torch.pi, torch.pi), (0.0, 2.35619), (0.0, 0.0))
         gripper_euler_z = torch.atan2(pos_y, pos_x)
 
-        gripper_euler_x = torch.ones_like(gripper_euler_x)
+        self.gripper_goal_quat_local[env_ids] = self.compute_quat(gripper_euler_x,
+                                                                  gripper_euler_y,
+                                                                  gripper_euler_z,
+                                                                  self.gripper_base_quat)
 
-
-        self.gripper_goal_quat_local[env_ids] = quat_from_euler_xyz(gripper_euler_x, gripper_euler_y, gripper_euler_z)
-
-        jaw_euler_x, jaw_euler_y, jaw_euler_z = self.sample_euler(len(env_ids), ((torch.pi / 2), (torch.pi / 2)), (-torch.pi/2, 0.0), (0.0, 0.0))
-
-        self.jaw_gola_quat_local[env_ids] = quat_from_euler_xyz(jaw_euler_x, jaw_euler_y, jaw_euler_z)
+        jaw_euler_x, jaw_euler_y, jaw_euler_z = self.sample_euler(len(env_ids), (0.0, 0.0), (-torch.pi/2, 0.0), (0.0, 0.0))
+        
+        self.jaw_gola_quat_local[env_ids] = self.compute_quat(jaw_euler_x,
+                                                              jaw_euler_y,
+                                                              jaw_euler_z,
+                                                              self.jaw_base_quat)
 
         self.set_visual_markers(env_ids)
 
@@ -189,4 +212,6 @@ class ReachTask(DirectRLEnv):
         self.robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 
         self.sample_end_effector_target(env_ids)
+
+        self._previous_joint_pos = self.robot.data.joint_pos.clone()
         
