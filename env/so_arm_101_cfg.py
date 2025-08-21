@@ -25,7 +25,7 @@ SO_ARM_101_CFG = ArticulationCfg(
     ),
 
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.0),
+        pos=(0.0, 0.0, 0.0028),
         joint_pos={
             "shoulder_pan": 0.0,
             "shoulder_lift": 0.0,#-1.740,
