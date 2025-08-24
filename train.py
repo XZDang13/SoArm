@@ -81,9 +81,9 @@ class Trainer:
         self.batch_size = self.env_nums * 10
         self.gamma = 0.99
         self.tau = 0.005
-        self.regularization_weight = 1e-1
+        self.regularization_weight = 1
 
-        self.std = 1.0
+        self.std = 1e-3
 
     @torch.no_grad()
     def get_action(self, obs_batch:list[list[float]], deterministic:bool=False):

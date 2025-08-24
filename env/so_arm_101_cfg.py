@@ -11,16 +11,13 @@ SO_ARM_101_CFG = ArticulationCfg(
         usd_path=f"{project_root}/assets/so101/so101.usd",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
-            disable_gravity=False,
-            retain_accelerations=False,
-            linear_damping=0.0,
-            angular_damping=0.0,
-            max_linear_velocity=1000.0,
-            max_angular_velocity=1000.0,
-            max_depenetration_velocity=5.0,
+            disable_gravity=False
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
-            enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=4
+            enabled_self_collisions=True,
+            solver_position_iteration_count=4,
+            solver_velocity_iteration_count=4,
+            fix_root_link=True
         ),
     ),
 
@@ -45,22 +42,10 @@ SO_ARM_101_CFG = ArticulationCfg(
                 "wrist_flex",
                 "wrist_roll",
             ],
-            effort_limit_sim=1.9,
-            velocity_limit_sim=1.5,
-            stiffness={
-                "shoulder_pan": 10.0,
-                "shoulder_lift": 10.0,
-                "elbow_flex": 10.0,
-                "wrist_flex": 10.0,
-                "wrist_roll": 10.0,
-            },
-            damping={
-                "shoulder_pan": 2.0,
-                "shoulder_lift": 2.0,
-                "elbow_flex": 2.0,
-                "wrist_flex": 2.0,
-                "wrist_roll": 2.0,
-            },
+            effort_limit_sim=10.,
+            velocity_limit_sim=10.,
+            stiffness=17.8,
+            damping=0.60
         ),
 
 
@@ -68,10 +53,11 @@ SO_ARM_101_CFG = ArticulationCfg(
             joint_names_expr=[
                 "gripper"
             ],
-            effort_limit_sim=2.5,
-            velocity_limit_sim=1.5,
-            stiffness=10.0,
-            damping=2.0
+            effort_limit_sim=10.,
+            velocity_limit_sim=10.,
+            stiffness=17.8,
+            damping=0.6
         ),
     },
+    soft_joint_pos_limit_factor=1.0
 )
