@@ -26,7 +26,7 @@ project_root = os.path.dirname(os.path.abspath(__file__))
 @configclass
 class REACH_TASK_CFG(SO_ARM_101_BASE_ENV):
     episode_length_s = 5.0
-    
+
     observation_space = 6+6+6+3+4+4
 
     gripper_marker = VisualizationMarkersCfg(

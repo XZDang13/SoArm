@@ -95,7 +95,7 @@ class ReachTask(DirectRLEnv):
         jaw_current_quat = self.robot.data.body_quat_w[:, 6, :]
         jaw_quat_error = -quat_error_magnitude(jaw_goal_quat, jaw_current_quat)
 
-        reward = gripper_distance_error * 5 + gripper_quat_error * 5 + jaw_quat_error
+        reward = gripper_distance_error * 5 + gripper_quat_error  + jaw_quat_error #+ (-0.01 * self._get_action_rate_reward())
 
         #print(gripper_current_pos)
         #print(gripper_goal_pos)
@@ -169,11 +169,11 @@ class ReachTask(DirectRLEnv):
         self.jaw_marker.visualize(self.jaw_goal_pos_world, self.jaw_gola_quat_world)
 
     def sample_end_effector_target(self, env_ids: torch.Tensor):
-        pos_x, pos_y, pos_z = self.sample_pos(len(env_ids), [0.1, 0.3], [-0.2, 0.2], [0.1, 0.35])
+        pos_x, pos_y, pos_z = self.sample_pos(len(env_ids), [0.25, 0.25], [0.0, 0.0], [0.17, 0.17])
 
         self.gripper_goal_pos_local[env_ids] = torch.stack([pos_x, pos_y, pos_z], dim=-1)
 
-        gripper_euler_x, gripper_euler_y, _ = self.sample_euler(len(env_ids), (-torch.pi, torch.pi), (0.0, 2.35619), (0.0, 0.0))
+        gripper_euler_x, gripper_euler_y, _ = self.sample_euler(len(env_ids), (0, 0), (torch.pi/2, torch.pi/2), (0.0, 0.0))
         gripper_euler_z = torch.atan2(pos_y, pos_x)
 
         self.gripper_goal_quat_local[env_ids] = self.compute_quat(gripper_euler_x,
@@ -181,7 +181,7 @@ class ReachTask(DirectRLEnv):
                                                                   gripper_euler_z,
                                                                   self.gripper_base_quat)
 
-        jaw_euler_x, jaw_euler_y, jaw_euler_z = self.sample_euler(len(env_ids), (0.0, 0.0), (-torch.pi/2, 0.0), (0.0, 0.0))
+        jaw_euler_x, jaw_euler_y, jaw_euler_z = self.sample_euler(len(env_ids), (0.0, 0.0), (0.0, 0.0), (0.0, 0.0))
         
         self.jaw_gola_quat_local[env_ids] = self.compute_quat(jaw_euler_x,
                                                               jaw_euler_y,
@@ -214,4 +214,3 @@ class ReachTask(DirectRLEnv):
         self.sample_end_effector_target(env_ids)
 
         self._previous_joint_pos = self.robot.data.joint_pos.clone()
-        

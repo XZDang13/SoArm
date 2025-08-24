@@ -17,7 +17,7 @@ SO_ARM_101_CFG = ArticulationCfg(
             angular_damping=0.0,
             max_linear_velocity=1000.0,
             max_angular_velocity=1000.0,
-            max_depenetration_velocity=1.0,
+            max_depenetration_velocity=5.0,
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=True, solver_position_iteration_count=8, solver_velocity_iteration_count=4
@@ -37,20 +37,41 @@ SO_ARM_101_CFG = ArticulationCfg(
         joint_vel={".*": 0.0},
     ),
     actuators={
-        "all": ImplicitActuatorCfg(
+        "arm": ImplicitActuatorCfg(
             joint_names_expr=[
                 "shoulder_pan",
                 "shoulder_lift",
                 "elbow_flex",
                 "wrist_flex",
                 "wrist_roll",
+            ],
+            effort_limit_sim=1.9,
+            velocity_limit_sim=1.5,
+            stiffness={
+                "shoulder_pan": 10.0,
+                "shoulder_lift": 10.0,
+                "elbow_flex": 10.0,
+                "wrist_flex": 10.0,
+                "wrist_roll": 10.0,
+            },
+            damping={
+                "shoulder_pan": 2.0,
+                "shoulder_lift": 2.0,
+                "elbow_flex": 2.0,
+                "wrist_flex": 2.0,
+                "wrist_roll": 2.0,
+            },
+        ),
+
+
+        "gripper": ImplicitActuatorCfg(
+            joint_names_expr=[
                 "gripper"
             ],
-            effort_limit_sim=300,
-            velocity_limit_sim=100.0,
-            stiffness=17.8,
-            damping=0.6,
-            armature=0.028
+            effort_limit_sim=2.5,
+            velocity_limit_sim=1.5,
+            stiffness=10.0,
+            damping=2.0
         ),
     },
 )

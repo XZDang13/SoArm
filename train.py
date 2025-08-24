@@ -30,7 +30,7 @@ from RLAlg.nn.steps import DeterministicContinuousPolicyStep, ValueStep
 
 from model.actor_critic import EncoderNet, StochasticDDPGActor, Critic
 
-from env.stack_cfg import STACK_TASK_CFG
+from env.reach_cfg import REACH_TASK_CFG
 
 def process_obs(obs):
     features = obs["policy"]
@@ -39,9 +39,9 @@ def process_obs(obs):
 
 class Trainer:
     def __init__(self):
-        cfg = STACK_TASK_CFG()
+        cfg = REACH_TASK_CFG()
         cfg.scene.num_envs = 256
-        self.env = gymnasium.make("STACK-v0", cfg=cfg)
+        self.env = gymnasium.make("REACH-v0", cfg=cfg)
 
         self.env_nums, self.obs_dim = self.env.observation_space.shape
 
@@ -76,12 +76,12 @@ class Trainer:
         
         self.obs = None
 
-        self.epochs = 1000
+        self.epochs = 500
         self.update_iteration = 50
         self.batch_size = self.env_nums * 10
         self.gamma = 0.99
         self.tau = 0.005
-        self.regularization_weight = 1e-3
+        self.regularization_weight = 1e-1
 
         self.std = 1.0
 
@@ -148,6 +148,7 @@ class Trainer:
             critic_loss = DDPGDoubleQ.compute_critic_loss(
                 self.actor, self.critic, self.critic_target, feature_batch, action_batch, reward_batch, next_feature_batch, done_batch, self.std, self.gamma
             )
+
             critic_loss.backward()
             self.critic_optimizer.step()
             self.encoder_optimizer.step()

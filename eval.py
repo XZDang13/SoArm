@@ -21,14 +21,14 @@ import numpy as np
 
 from RLAlg.nn.steps import DeterministicContinuousPolicyStep
 
-from env.stack_cfg import STACK_TASK_CFG
+from env.reach_cfg import REACH_TASK_CFG
 from model.actor_critic import EncoderNet, StochasticDDPGActor
 
 class Trainer:
     def __init__(self):
-        cfg = STACK_TASK_CFG()
+        cfg = REACH_TASK_CFG()
         cfg.scene.num_envs = 12
-        self.env = gymnasium.make("STACK-v0", cfg=cfg)
+        self.env = gymnasium.make("REACH-v0", cfg=cfg)
 
         self.device = self.env.unwrapped.device
 
@@ -60,6 +60,7 @@ class Trainer:
 
         for i in range(1000):
             action = self.get_action(obs_dict)
+            print(action)
             #action = torch.zeros_like(action)
             next_obs_dict, reward, terminate, timeout, info = self.env.step(action)
             done = terminate | timeout

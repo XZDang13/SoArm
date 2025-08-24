@@ -46,3 +46,5 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
             )
         ]
     )
+
+    gripper_marker = FRAME_MARKER_SMALL_CFG.replace(prim_path="/Visuals/Command/goal_pose")

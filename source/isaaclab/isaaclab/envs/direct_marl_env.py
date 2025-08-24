@@ -1,4 +1,4 @@
-# Copyright (c) 2022-2025, The Isaac Lab Project Developers.
+# Copyright (c) 2022-2025, The Isaac Lab Project Developers (https://github.com/isaac-sim/IsaacLab/blob/main/CONTRIBUTORS.md).
 # All rights reserved.
 #
 # SPDX-License-Identifier: BSD-3-Clause
@@ -20,11 +20,13 @@ from typing import Any, ClassVar
 import isaacsim.core.utils.torch as torch_utils
 import omni.kit.app
 import omni.log
+import omni.physx
 from isaacsim.core.version import get_version
 
 from isaaclab.managers import EventManager
 from isaaclab.scene import InteractiveScene
 from isaaclab.sim import SimulationContext
+from isaaclab.sim.utils import attach_stage_to_usd_context, use_stage
 from isaaclab.utils.noise import NoiseModel
 from isaaclab.utils.timer import Timer
 
@@ -95,6 +97,10 @@ class DirectMARLEnv(gym.Env):
         else:
             raise RuntimeError("Simulation context already exists. Cannot create a new one.")
 
+        # make sure torch is running on the correct device
+        if "cuda" in self.device:
+            torch.cuda.set_device(self.device)
+
         # print useful information
         print("[INFO]: Base environment:")
         print(f"\tEnvironment device    : {self.device}")
@@ -113,8 +119,11 @@ class DirectMARLEnv(gym.Env):
 
         # generate scene
         with Timer("[INFO]: Time taken for scene creation", "scene_creation"):
-            self.scene = InteractiveScene(self.cfg.scene)
-            self._setup_scene()
+            # set the stage context for scene creation steps which use the stage
+            with use_stage(self.sim.get_initial_stage()):
+                self.scene = InteractiveScene(self.cfg.scene)
+                self._setup_scene()
+                attach_stage_to_usd_context()
         print("[INFO]: Scene manager: ", self.scene)
 
         # set up camera viewport controller
@@ -126,22 +135,30 @@ class DirectMARLEnv(gym.Env):
         else:
             self.viewport_camera_controller = None
 
+        # create event manager
+        # note: this is needed here (rather than after simulation play) to allow USD-related randomization events
+        #   that must happen before the simulation starts. Example: randomizing mesh scale
+        if self.cfg.events:
+            self.event_manager = EventManager(self.cfg.events, self)
+
+            # apply USD-related randomization events
+            if "prestartup" in self.event_manager.available_modes:
+                self.event_manager.apply(mode="prestartup")
+
         # play the simulator to activate physics handles
         # note: this activates the physics simulation view that exposes TensorAPIs
         # note: when started in extension mode, first call sim.reset_async() and then initialize the managers
         if builtins.ISAAC_LAUNCHED_FROM_TERMINAL is False:
             print("[INFO]: Starting the simulation. This may take a few seconds. Please wait...")
             with Timer("[INFO]: Time taken for simulation start", "simulation_start"):
-                self.sim.reset()
-
-        # -- event manager used for randomization
-        if self.cfg.events:
-            self.event_manager = EventManager(self.cfg.events, self)
-            print("[INFO] Event Manager: ", self.event_manager)
-
-        # make sure torch is running on the correct device
-        if "cuda" in self.device:
-            torch.cuda.set_device(self.device)
+                # since the reset can trigger callbacks which use the stage,
+                # we need to set the stage context here
+                with use_stage(self.sim.get_initial_stage()):
+                    self.sim.reset()
+                # update scene to pre populate data buffers for assets and sensors.
+                # this is needed for the observation manager to get valid tensors for initialization.
+                # this shouldn't cause an issue since later on, users do a reset over all the environments so the lazy buffers would be reset.
+                self.scene.update(dt=self.physics_dt)
 
         # check if debug visualization is has been implemented by the environment
         source_code = inspect.getsource(self._set_debug_vis_impl)
@@ -188,6 +205,9 @@ class DirectMARLEnv(gym.Env):
 
         # perform events at the start of the simulation
         if self.cfg.events:
+            # we print it here to make the logging consistent
+            print("[INFO] Event Manager: ", self.event_manager)
+
             if "startup" in self.event_manager.available_modes:
                 self.event_manager.apply(mode="startup")
 
@@ -344,7 +364,7 @@ class DirectMARLEnv(gym.Env):
         if self.cfg.action_noise_model:
             for agent, action in actions.items():
                 if agent in self._action_noise_model:
-                    actions[agent] = self._action_noise_model[agent].apply(action)
+                    actions[agent] = self._action_noise_model[agent](action)
         # process actions
         self._pre_physics_step(actions)
 
@@ -397,7 +417,7 @@ class DirectMARLEnv(gym.Env):
         if self.cfg.observation_noise_model:
             for agent, obs in self.obs_dict.items():
                 if agent in self._observation_noise_model:
-                    self.obs_dict[agent] = self._observation_noise_model[agent].apply(obs)
+                    self.obs_dict[agent] = self._observation_noise_model[agent](obs)
 
         # return observations, rewards, resets and extras
         return self.obs_dict, self.reward_dict, self.terminated_dict, self.time_out_dict, self.extras
@@ -450,7 +470,7 @@ class DirectMARLEnv(gym.Env):
         By convention, if mode is:
 
         - **human**: Render to the current display and return nothing. Usually for human consumption.
-        - **rgb_array**: Return an numpy.ndarray with shape (x, y, 3), representing RGB values for an
+        - **rgb_array**: Return a numpy.ndarray with shape (x, y, 3), representing RGB values for an
           x-by-y pixel image, suitable for turning into a video.
 
         Args:
@@ -518,9 +538,18 @@ class DirectMARLEnv(gym.Env):
             del self.scene
             if self.viewport_camera_controller is not None:
                 del self.viewport_camera_controller
+
             # clear callbacks and instance
+            if float(".".join(get_version()[2])) >= 5:
+                if self.cfg.sim.create_stage_in_memory:
+                    # detach physx stage
+                    omni.physx.get_physx_simulation_interface().detach_stage()
+                    self.sim.stop()
+                    self.sim.clear()
+
             self.sim.clear_all_callbacks()
             self.sim.clear_instance()
+
             # destroy the window
             if self._window is not None:
                 self._window = None

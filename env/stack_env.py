@@ -22,6 +22,10 @@ class StackTask(DirectRLEnv):
         self._previous_actions = torch.zeros(self.num_envs, 6, device=self.device)
         self._previous_joint_pos = self.robot.data.joint_pos.clone()
 
+        self.visual_marker_pos = torch.zeros(self.num_envs, 3, device=self.device)
+        self.visual_marker_quat = torch.zeros(self.num_envs, 4, device=self.device)
+        self.visual_marker_quat[:, 0] = 1.0
+
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot)
         self.cube = RigidObject(self.cfg.cube)
@@ -29,6 +33,8 @@ class StackTask(DirectRLEnv):
         self.scene.articulations["robot"] = self.robot
         self.scene.rigid_objects["cube"] = self.cube
         self.scene.sensors["end_effector"] = self.end_effector
+
+        self.visual_marker = VisualizationMarkers(self.cfg.gripper_marker)
 
         self.cfg.terrain.num_envs = self.scene.cfg.num_envs
         self.cfg.terrain.env_spacing = self.scene.cfg.env_spacing
@@ -80,12 +86,17 @@ class StackTask(DirectRLEnv):
     
     def _get_rewards(self) -> torch.Tensor:
         cube_pos_w = self.cube.data.root_state_w[:, :3]
-        cube_pos_w[:, 2] += 0.05
+        cube_pos_w[:, 2] += 0.1
+
+        cube_quat_w = self.cube.data.root_state_w[:, 3:7]
+
+
         end_effector_pos_w = self.end_effector.data.target_pos_w[:, 0, :]
+        end_effector_quat_w = self.end_effector.data.target_quat_w[:, 0, :]
 
-        distance = -torch.norm(cube_pos_w - end_effector_pos_w, p=2, dim=1)
-
-        reward = distance
+        distance_error = -torch.norm(cube_pos_w - end_effector_pos_w, p=2, dim=1)
+        quat_error = -quat_error_magnitude(cube_quat_w, end_effector_quat_w)
+        reward = distance_error * 5 + quat_error * 5
 
         return reward
 
@@ -117,13 +128,17 @@ class StackTask(DirectRLEnv):
 
         euler_x = torch.empty(sample_num, device=self.device).fill_(0.0)
         euler_y = torch.empty(sample_num, device=self.device).fill_(0.0)
-        euler_z = torch.empty(sample_num, device=self.device).uniform_(-torch.pi, torch.pi)
+        euler_z = torch.empty(sample_num, device=self.device).uniform_(-torch.pi/4, torch.pi/4)
 
         quat = quat_from_euler_xyz(euler_x, euler_y, euler_z)
 
         root_state[:, 3:7] = quat
 
         self.cube.write_root_state_to_sim(root_state, env_ids)
+
+        self.visual_marker_pos[env_ids] = root_state[:, :3] + torch.tensor([0.0, 0.0, 0.1], device=self.device)
+        self.visual_marker_quat[env_ids] = root_state[:, 3:7]
+        self.visual_marker.visualize(self.visual_marker_pos, self.visual_marker_quat)
 
     def reset_robot(self, env_ids: torch.Tensor | None):
         joint_pos = self.robot.data.default_joint_pos[env_ids]
@@ -151,10 +166,4 @@ class StackTask(DirectRLEnv):
         self.sample_cube_state(env_ids)
 
         self._previous_joint_pos = self.robot.data.joint_pos.clone()
-
-        x, y, z = euler_xyz_from_quat(self.end_effector.data.target_quat_w[:, 0, :])
-        print(torch.rad2deg(x))
-        print(torch.rad2deg(y))
-        print(torch.rad2deg(z))
-        print("-------------------")
         
