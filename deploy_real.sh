@@ -1,0 +1,1 @@
+python deploy_real.py --robot.type=so101_follower  --robot.port=/dev/ttyACM0 --robot.id=ku_follower_arm

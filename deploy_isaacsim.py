@@ -83,6 +83,10 @@ for i in range(1000):
     target_pos = current_pos + action * 0.25
     robot.set_joint_position_targets(target_pos)
 
+    print(action)
+    print(target_pos)
+    print("-----------------")
+
     for _ in range(2):
         my_world.step(render=True)
 

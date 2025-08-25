@@ -31,6 +31,7 @@ from RLAlg.nn.steps import DeterministicContinuousPolicyStep, ValueStep
 from model.actor_critic import EncoderNet, StochasticDDPGActor, Critic
 
 from env.reach_cfg import REACH_TASK_CFG
+from env.stack_cfg import STACK_TASK_CFG
 
 def process_obs(obs):
     features = obs["policy"]
@@ -39,9 +40,9 @@ def process_obs(obs):
 
 class Trainer:
     def __init__(self):
-        cfg = REACH_TASK_CFG()
+        cfg = STACK_TASK_CFG()
         cfg.scene.num_envs = 256
-        self.env = gymnasium.make("REACH-v0", cfg=cfg)
+        self.env = gymnasium.make("STACK-v0", cfg=cfg)
 
         self.env_nums, self.obs_dim = self.env.observation_space.shape
 

@@ -96,7 +96,7 @@ class StackTask(DirectRLEnv):
 
         distance_error = -torch.norm(cube_pos_w - end_effector_pos_w, p=2, dim=1)
         quat_error = -quat_error_magnitude(cube_quat_w, end_effector_quat_w)
-        reward = distance_error * 5 + quat_error * 5
+        reward = distance_error * 5 + quat_error
 
         return reward
 

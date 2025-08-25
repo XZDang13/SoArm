@@ -24,9 +24,9 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
 
     cube:RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Cube",
-        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.3, 0.0, 0.015], rot=[1, 0, 0, 0]),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.3, 0.0, 0.019], rot=[1, 0, 0, 0]),
         spawn=sim_utils.CuboidCfg(
-            size=(0.03, 0.03, 0.03),
+            size=(0.038, 0.038, 0.038),
             rigid_props=sim_utils.RigidBodyPropertiesCfg(),
             mass_props=sim_utils.MassPropertiesCfg(mass=1.0),
             collision_props=sim_utils.CollisionPropertiesCfg(),
