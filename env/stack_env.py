@@ -11,6 +11,7 @@ from isaaclab.utils.math import (subtract_frame_transforms, quat_from_euler_xyz,
                                  euler_xyz_from_quat)
 
 from .stack_cfg import STACK_TASK_CFG
+from reward.stack_task import StackTaskReward
 
 class StackTask(DirectRLEnv):
     cfg:STACK_TASK_CFG
@@ -25,6 +26,9 @@ class StackTask(DirectRLEnv):
         self.visual_marker_pos = torch.zeros(self.num_envs, 3, device=self.device)
         self.visual_marker_quat = torch.zeros(self.num_envs, 4, device=self.device)
         self.visual_marker_quat[:, 0] = 1.0
+
+        self.end_effector_pre_state = torch.zeros(self.num_envs, 7, device=self.device)
+        self.cube_pre_state = torch.zeros(self.num_envs, 7, device=self.device)
 
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot)
@@ -81,22 +85,29 @@ class StackTask(DirectRLEnv):
         #end_effector_quat = self.end_effector.data.target_quat_source[:, 0, :]
 
         self._previous_joint_pos = self.robot.data.joint_pos.clone()
+        self.end_effector_pre_state[:, :3] = self.end_effector.data.target_pos_w[:, 0, :].clone()
+        self.end_effector_pre_state[:, 3:7] = self.end_effector.data.target_quat_w[:, 0, :].clone()
+        self.cube_pre_state[:, :] = self.cube.data.root_state_w[:, :7].clone()
 
         return {"policy": obs}
     
     def _get_rewards(self) -> torch.Tensor:
         cube_pos_w = self.cube.data.root_state_w[:, :3]
-        cube_pos_w[:, 2] += 0.1
+        #cube_pos_w[:, 2] += 0.1
 
         cube_quat_w = self.cube.data.root_state_w[:, 3:7]
-
 
         end_effector_pos_w = self.end_effector.data.target_pos_w[:, 0, :]
         end_effector_quat_w = self.end_effector.data.target_quat_w[:, 0, :]
 
-        distance_error = -torch.norm(cube_pos_w - end_effector_pos_w, p=2, dim=1)
+        motion_reward = StackTaskReward.compute_reward(
+            self.end_effector_pre_state[:, :3],
+            end_effector_pos_w,
+            cube_pos_w
+        )
+        
         quat_error = -quat_error_magnitude(cube_quat_w, end_effector_quat_w)
-        reward = distance_error * 5 + quat_error
+        reward = motion_reward * 5 + quat_error
 
         return reward
 
@@ -166,4 +177,7 @@ class StackTask(DirectRLEnv):
         self.sample_cube_state(env_ids)
 
         self._previous_joint_pos = self.robot.data.joint_pos.clone()
+        self.end_effector_pre_state[env_ids, :3] = self.end_effector.data.target_pos_w[env_ids, 0, :].clone()
+        self.end_effector_pre_state[env_ids, 3:7] = self.end_effector.data.target_quat_w[env_ids, 0, :].clone()
+        self.cube_pre_state[env_ids, :] = self.cube.data.root_state_w[env_ids, :7].clone()
         
