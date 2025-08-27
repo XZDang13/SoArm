@@ -84,7 +84,7 @@ class Trainer:
         self.tau = 0.005
         self.regularization_weight = 1
 
-        self.std = 1e-3
+        self.std = 1e-1
 
     @torch.no_grad()
     def get_action(self, obs_batch:list[list[float]], deterministic:bool=False):

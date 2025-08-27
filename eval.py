@@ -29,6 +29,7 @@ class Trainer:
     def __init__(self):
         cfg = STACK_TASK_CFG()
         cfg.scene.num_envs = 12
+        cfg.is_training = False
         self.env = gymnasium.make("STACK-v0", cfg=cfg)
 
         self.device = self.env.unwrapped.device

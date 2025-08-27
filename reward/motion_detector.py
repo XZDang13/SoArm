@@ -179,13 +179,26 @@ class MotionDetector:
         return d <= threshold
     
     @staticmethod
-    def is_grasping(gripper_distance: torch.Tensor,
+    def is_grasping_distance(gripper_distance: torch.Tensor,
                     next_gripper_distance: torch.Tensor,
                     min_close: float = 0.0025) -> torch.Tensor:
         """
         True if finger distance decreases by at least 'min_close'.
         """
         return (gripper_distance - next_gripper_distance) >= min_close
+    
+    @staticmethod
+    def is_grasping_joint_pos(gripper_joint_pos: torch.Tensor,
+                    next_gripper_joint_pos: torch.Tensor,
+                    min_close: float = 0.0025,
+                    reversed: bool = False) -> torch.Tensor:
+        """
+        True if finger distance decreases by at least 'min_close'.
+        """
+        if reversed:
+            return (next_gripper_joint_pos - gripper_joint_pos) >= min_close
+        
+        return (gripper_joint_pos - next_gripper_joint_pos) >= min_close
     
     @staticmethod
     def is_moving(

@@ -88,7 +88,7 @@ def move_to_state(robot:Robot, state:dict):
 @draccus.wrap()
 def inference(cfg: SetupConfig):
     device = torch.device("cuda:0")
-    encoder = EncoderNet(6+6+6+3+4+4, [256, 256, 256]).to(device)
+    encoder = EncoderNet(6+6+6+3+4, [256, 256, 256]).to(device)
     actor = StochasticDDPGActor(encoder.dim, [256, 256], 6).to(device)
 
     encoder_params, actor_params, _ = torch.load("model.pth")
@@ -124,7 +124,7 @@ def inference(cfg: SetupConfig):
     current_pos = np.deg2rad(get_joint_pos(robot))
     pre_pos = np.deg2rad(get_joint_pos(robot))
     pre_action = np.array([0, 0, 0, 0, 0, 0])
-    goal_state = np.array([0.25, 0.0, 0.17, 1.0, 0.0, 0.0, 0.0, 0.7071, 0.7071, 0.0, 0.0])
+    goal_state = np.array([ 1.9610e-01, -1.7965e-01,  1.6200e-02,  9.4926e-01,  0.0000e+00, -2.9802e-08, -3.1448e-01])
 
     try:
         log_say("Settin to init state", cfg.play_sounds, blocking=True)
@@ -169,7 +169,7 @@ def inference(cfg: SetupConfig):
             'shoulder_pan.pos': 0.0,
             'shoulder_lift.pos': -100.0,
             'elbow_flex.pos': 100.0,
-            'wrist_flex.pos': 72.85,
+            'wrist_flex.pos': 65.0,
             'wrist_roll.pos': 0.0,
             'gripper.pos': 0.0
         }

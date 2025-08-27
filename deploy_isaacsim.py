@@ -18,7 +18,7 @@ from isaacsim.core.utils.viewports import set_camera_view
 from isaacsim.storage.native import get_assets_root_path
 
 device = torch.device("cuda:0")
-encoder = EncoderNet(6+6+6+3+4+4, [256, 256, 256]).to(device)
+encoder = EncoderNet(6+6+6+3+4, [256, 256, 256]).to(device)
 actor = StochasticDDPGActor(encoder.dim, [256, 256], 6).to(device)
 
 encoder_params, actor_params, _ = torch.load("model.pth")
@@ -75,7 +75,7 @@ my_world.reset()
 current_pos = robot.get_joint_positions().copy()
 pre_pos = current_pos.copy()
 pre_action = np.array([[0, 0, 0, 0, 0, 0]])
-goal_state = np.array([[0.25, 0.0, 0.17, 1.0, 0.0, 0.0, 0.0, 0.7071, 0.7071, 0.0, 0.0]])
+goal_state = np.array([[ 2.9691e-01, -1.4045e-01,  1.6200e-02,  9.9243e-01,  0.0000e+00, -3.7253e-08,  1.2282e-01]])
 
 for i in range(1000):
     obs = np.concatenate([goal_state, current_pos, pre_pos, pre_action], axis=-1)

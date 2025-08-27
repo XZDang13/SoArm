@@ -70,14 +70,22 @@ class StackTask(DirectRLEnv):
             cube_quat_w
         )
 
-        joint_pos = self.robot.data.joint_pos              
-        previous_actions = self._previous_actions             
+        joint_pos = self.robot.data.joint_pos.clone()
+        previous_joint_pos = self._previous_joint_pos.clone()              
+        previous_actions = self._previous_actions.clone()
+
+        if self.cfg.is_training:
+            cube_pos_b += torch.randn_like(cube_pos_b) * 0.01
+            cube_quat_b += torch.randn_like(cube_quat_b) * 0.01
+            joint_pos += torch.randn_like(joint_pos) * 0.01
+            previous_joint_pos += torch.randn_like(previous_joint_pos) * 0.01
+            previous_actions += torch.randn_like(previous_actions) * 0.01             
 
         obs = torch.cat([
             cube_pos_b,#3
             cube_quat_b,#4
             joint_pos, #6
-            self._previous_joint_pos, #6
+            previous_joint_pos, #6
             previous_actions, #6
         ], dim=-1)
 
@@ -105,9 +113,18 @@ class StackTask(DirectRLEnv):
             end_effector_pos_w,
             cube_pos_w
         )
+
+        is_gripper_joint_open = (self.robot.data.joint_pos[:, -1] >= (torch.pi / 4)).float()
         
         quat_error = -quat_error_magnitude(cube_quat_w, end_effector_quat_w)
-        reward = motion_reward * 5 + quat_error
+        
+        penlty = self._get_action_rate_reward() * (-0.1) + self._joint_velocity_penalty() * (-0.05)
+        
+        reward = motion_reward * 5 + quat_error * 1.5 + is_gripper_joint_open + penlty
+
+        if not self.cfg.is_training:
+            print(motion_reward)
+            print("----------------")
 
         return reward
 
@@ -180,4 +197,20 @@ class StackTask(DirectRLEnv):
         self.end_effector_pre_state[env_ids, :3] = self.end_effector.data.target_pos_w[env_ids, 0, :].clone()
         self.end_effector_pre_state[env_ids, 3:7] = self.end_effector.data.target_quat_w[env_ids, 0, :].clone()
         self.cube_pre_state[env_ids, :] = self.cube.data.root_state_w[env_ids, :7].clone()
+
+        '''
+        cube_pos_w = self.cube.data.root_state_w[env_ids, :3]
+        cube_quat_w = self.cube.data.root_state_w[env_ids, 3:7]
+        
+        cube_pos_b, cube_quat_b = subtract_frame_transforms(
+            self.robot.data.root_state_w[env_ids, :3], 
+            self.robot.data.root_state_w[env_ids, 3:7], 
+            cube_pos_w, 
+            cube_quat_w
+        )
+
+        state = torch.cat([cube_pos_b, cube_quat_b], dim=-1)
+        print(state)
+        print("-------------")
+        '''
         

@@ -18,7 +18,7 @@ project_root = os.path.dirname(os.path.abspath(__file__))
 
 @configclass
 class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
-    episode_length_s = 5.0
+    episode_length_s = 7.0
     
     observation_space = 6+6+6+3+4
 

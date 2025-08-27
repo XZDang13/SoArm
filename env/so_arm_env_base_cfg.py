@@ -20,6 +20,8 @@ class SO_ARM_101_BASE_ENV(DirectRLEnvCfg):
 
     action_scale = 0.25
 
+    is_training = True
+
     sim: SimulationCfg = SimulationCfg(
         dt=1 / 60,
         render_interval=decimation,

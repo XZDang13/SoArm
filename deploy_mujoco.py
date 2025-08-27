@@ -7,7 +7,7 @@ from model.actor_critic import EncoderNet, StochasticDDPGActor
 from RLAlg.nn.steps import DeterministicContinuousPolicyStep
 
 device = torch.device("cuda:0")
-encoder = EncoderNet(6+6+6+3+4+4, [256, 256, 256]).to(device)
+encoder = EncoderNet(6+6+6+3+4, [256, 256, 256]).to(device)
 actor = StochasticDDPGActor(encoder.dim, [256, 256], 6).to(device)
 
 encoder_params, actor_params, _ = torch.load("model.pth")
@@ -33,9 +33,9 @@ def pd_control(target_q, q, kp, target_dq, dq, kd):
 
 m = mujoco.MjModel.from_xml_path("env/assets/so101/scene.xml")
 d = mujoco.MjData(m)
-m.opt.timestep = 1/60
+m.opt.timestep = 1/30
 
-goal_state = np.array([0.25, 0.0, 0.17, 1.0, 0.0, 0.0, 0.0, 0.7071, 0.7071, 0.0, 0.0])
+goal_state = np.array([ 2.0074e-01, -1.6178e-01,  1.6200e-02,  9.6920e-01, -5.9605e-08, 1.4901e-08,  2.4629e-01])
 pre_pos = d.qpos[:].copy()
 current_pos = d.qpos[:].copy()
 pre_action = np.array([0, 0, 0, 0, 0, 0])
@@ -56,11 +56,11 @@ with mujoco.viewer.launch_passive(m, d) as viewer:
         
         target_pos = target_pos.clip(m.jnt_range[:, 0], m.jnt_range[:, 1])
 
-        for _ in range(2):
-            #d.qpos[:] = target_pos
-            tau = pd_control(target_pos, d.qpos, 17.8, np.zeros_like(d.qvel), d.qvel, 0.6)
-            d.ctrl[:] = tau
-            mujoco.mj_step(m, d)
+        
+        d.qpos[:] = target_pos
+        #tau = pd_control(target_pos, d.qpos, 17.8, np.zeros_like(d.qvel), d.qvel, 0.6)
+        #d.ctrl[:] = tau
+        mujoco.mj_step(m, d)
 
         pre_pos = current_pos.copy()
         current_pos = d.qpos[:].copy()

@@ -37,7 +37,7 @@ class EncoderNet(nn.Module):
         for layer in self.layers:
             x = layer(x)
             x = F.silu(x)
-            x = F.dropout(x, p=0.1, training=aug)
+            x = F.dropout(x, p=0.15, training=aug)
 
         return x
     
