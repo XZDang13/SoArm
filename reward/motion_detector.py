@@ -45,6 +45,61 @@ def compute_direction(
     n = torch.norm(d, dim=-1, keepdim=True)
     return d / (n + eps) 
 
+def _quat_normalize(q: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    """
+    Normalize quaternion(s) to unit length. q shape (..., 4) with (w, x, y, z) or (x,y,z,w) — pick one & stick to it.
+    Below assumes (w, x, y, z). If you store as (x,y,z,w), swap accordingly.
+    """
+    return q / (q.norm(dim=-1, keepdim=True) + eps)
+
+def quat_shortest_dot(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
+    """
+    Dot product with double-cover handled: returns |<q1, q2>| so that q and -q are identical.
+    Shape: (...,).
+    """
+    q1 = _quat_normalize(q1)
+    q2 = _quat_normalize(q2)
+    return torch.clamp(torch.sum(q1 * q2, dim=-1).abs(), max=1.0)
+
+def quat_geodesic_angle(q1: torch.Tensor, q2: torch.Tensor, eps: float = 1e-8) -> torch.Tensor:
+    """
+    Smallest angle (in radians) between orientations q1 and q2 on SO(3).
+    Angle = 2 * arccos(|dot(q1, q2)|).
+    Returns shape (...,).
+    """
+    d = quat_shortest_dot(q1, q2)
+    # numerical clamp to valid domain
+    d = torch.clamp(d, -1.0 + eps, 1.0 - eps)
+    return 2.0 * torch.arccos(d)
+
+def is_quat_reached(
+    q: torch.Tensor,
+    q_target: torch.Tensor,
+    threshold_rad: float,
+) -> torch.Tensor:
+    """
+    True if the orientation is within threshold_rad (radians) of target.
+    q, q_target: shape (..., 4)
+    returns: shape (...,) boolean tensor
+    """
+    ang = quat_geodesic_angle(q, q_target)
+    return ang <= threshold_rad
+
+def is_rotating_to_quat(
+    q_from: torch.Tensor,
+    q_to: torch.Tensor,
+    q_target: torch.Tensor,
+    tol_decrease: float = 1e-4,
+) -> torch.Tensor:
+    """
+    True if between t and t+1 we got closer to target orientation by at least tol_decrease radians.
+    Uses geodesic angle monotonic decrease (robust & sign-free).
+    q_* shape (..., 4); returns (...,) boolean tensor.
+    """
+    a_from = quat_geodesic_angle(q_from, q_target)
+    a_to   = quat_geodesic_angle(q_to,   q_target)
+    return (a_from - a_to) >= tol_decrease
+
 class MotionDetector:
     @staticmethod
     def is_aligned(
@@ -209,3 +264,26 @@ class MotionDetector:
     ) -> torch.Tensor:
         d = compute_distance(pos, next_pos, plane_index=plane_index)
         return d >= threshold
+    
+    @staticmethod
+    def is_rotating_to_quat(
+        quat_from: torch.Tensor,
+        quat_to: torch.Tensor,
+        target_quat: torch.Tensor,
+        tol_decrease: float = 1e-4,
+    ) -> torch.Tensor:
+        """
+        Returns True if orientation moves closer to target (by >= tol_decrease radians).
+        """
+        return is_rotating_to_quat(quat_from, quat_to, target_quat, tol_decrease=tol_decrease)
+
+    @staticmethod
+    def is_quat_reached(
+        quat: torch.Tensor,
+        target_quat: torch.Tensor,
+        threshold_rad: float = 2.5 * torch.pi / 180.0,  # ~2.5 degrees default
+    ) -> torch.Tensor:
+        """
+        Returns True if orientation is within threshold_rad of target.
+        """
+        return is_quat_reached(quat, target_quat, threshold_rad)

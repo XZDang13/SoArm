@@ -4,7 +4,7 @@ import torch
 import isaaclab.sim as sim_utils
 from isaaclab.assets import Articulation, RigidObject
 from isaaclab.markers import VisualizationMarkers
-from isaaclab.sensors import FrameTransformer
+from isaaclab.sensors import FrameTransformer, ContactSensor
 from isaaclab.envs import DirectRLEnv
 from isaaclab.utils.math import (subtract_frame_transforms, quat_from_euler_xyz,
                                  quat_error_magnitude, quat_mul,
@@ -34,9 +34,12 @@ class StackTask(DirectRLEnv):
         self.robot = Articulation(self.cfg.robot)
         self.cube = RigidObject(self.cfg.cube)
         self.end_effector = FrameTransformer(self.cfg.end_effector)
+        self.gripper_contact = ContactSensor(self.cfg.gripper_contact)
+
         self.scene.articulations["robot"] = self.robot
         self.scene.rigid_objects["cube"] = self.cube
         self.scene.sensors["end_effector"] = self.end_effector
+        self.scene.sensors["gripper_contract"] = self.gripper_contact
 
         self.visual_marker = VisualizationMarkers(self.cfg.gripper_marker)
 
@@ -108,23 +111,28 @@ class StackTask(DirectRLEnv):
         end_effector_pos_w = self.end_effector.data.target_pos_w[:, 0, :]
         end_effector_quat_w = self.end_effector.data.target_quat_w[:, 0, :]
 
+        force = self.gripper_contact.data.force_matrix_w
+        is_gripper_touch_cube = torch.linalg.norm(force, dim=-1) > 1.0
+        print(force.size())
+        print(torch.linalg.norm(force, dim=-1).size())
+        print("----------------")
+
         motion_reward = StackTaskReward.compute_reward(
             self.end_effector_pre_state[:, :3],
+            self.end_effector_pre_state[:, 3:7],
             end_effector_pos_w,
-            cube_pos_w
+            end_effector_quat_w,
+            cube_pos_w,
+            cube_quat_w
         )
 
         is_gripper_joint_open = (self.robot.data.joint_pos[:, -1] >= (torch.pi / 4)).float()
         
-        quat_error = -quat_error_magnitude(cube_quat_w, end_effector_quat_w)
-        
         penlty = self._get_action_rate_reward() * (-0.1) + self._joint_velocity_penalty() * (-0.05)
         
-        reward = motion_reward * 5 + quat_error * 1.5 + is_gripper_joint_open + penlty
-
-        if not self.cfg.is_training:
-            print(motion_reward)
-            print("----------------")
+        reward = motion_reward * 5 + is_gripper_joint_open + penlty
+        #print(motion_reward)
+        #print("-----------------")
 
         return reward
 
@@ -148,8 +156,8 @@ class StackTask(DirectRLEnv):
         root_state = self.cube.data.default_root_state[env_ids]
         root_state[:, :3] += self.terrain.env_origins[env_ids]
         
-        offset_x = torch.empty(sample_num, device=self.device).uniform_(-0.15, 0.)
-        offset_y = torch.empty(sample_num, device=self.device).uniform_(-0.2, 0.2)
+        offset_x = torch.empty(sample_num, device=self.device).uniform_(-0.1, 0.05)
+        offset_y = torch.empty(sample_num, device=self.device).uniform_(-0.175, 0.175)
 
         root_state[:, 0] += offset_x
         root_state[:, 1] += offset_y
