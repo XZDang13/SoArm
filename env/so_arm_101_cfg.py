@@ -1,5 +1,5 @@
 import os
-
+import torch
 import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg
 from isaaclab.assets.articulation import ArticulationCfg
@@ -27,7 +27,7 @@ SO_ARM_101_CFG = ArticulationCfg(
             "shoulder_pan": 0.0,
             "shoulder_lift": 0.0,#-1.740,
             "elbow_flex": 0.0, #1.5708,
-            "wrist_flex": 0.0,#1.13446,
+            "wrist_flex": 1.571,#1.13446,
             "wrist_roll": 0.0,
             "gripper": 0.0
         },

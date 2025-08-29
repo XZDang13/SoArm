@@ -32,14 +32,16 @@ class StackTask(DirectRLEnv):
 
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot)
-        self.cube = RigidObject(self.cfg.cube)
+        self.green_cube = RigidObject(self.cfg.green_cube)
         self.end_effector = FrameTransformer(self.cfg.end_effector)
         self.gripper_contact = ContactSensor(self.cfg.gripper_contact)
+        self.jaw_contact = ContactSensor(self.cfg.jaw_contact)
 
         self.scene.articulations["robot"] = self.robot
-        self.scene.rigid_objects["cube"] = self.cube
+        self.scene.rigid_objects["green_cube"] = self.green_cube
         self.scene.sensors["end_effector"] = self.end_effector
-        self.scene.sensors["gripper_contract"] = self.gripper_contact
+        self.scene.sensors["gripper_contact"] = self.gripper_contact
+        self.scene.sensors["jaw_contact"] = self.jaw_contact
 
         self.visual_marker = VisualizationMarkers(self.cfg.gripper_marker)
 
@@ -63,8 +65,8 @@ class StackTask(DirectRLEnv):
     def _get_observations(self):
         self._previous_actions = self._actions.clone()
 
-        cube_pos_w = self.cube.data.root_state_w[:, :3]
-        cube_quat_w = self.cube.data.root_state_w[:, 3:7]
+        cube_pos_w = self.green_cube.data.root_state_w[:, :3]
+        cube_quat_w = self.green_cube.data.root_state_w[:, 3:7]
         
         cube_pos_b, cube_quat_b = subtract_frame_transforms(
             self.robot.data.root_state_w[:, :3], 
@@ -98,24 +100,30 @@ class StackTask(DirectRLEnv):
         self._previous_joint_pos = self.robot.data.joint_pos.clone()
         self.end_effector_pre_state[:, :3] = self.end_effector.data.target_pos_w[:, 0, :].clone()
         self.end_effector_pre_state[:, 3:7] = self.end_effector.data.target_quat_w[:, 0, :].clone()
-        self.cube_pre_state[:, :] = self.cube.data.root_state_w[:, :7].clone()
+        self.cube_pre_state[:, :] = self.green_cube.data.root_state_w[:, :7].clone()
 
         return {"policy": obs}
     
     def _get_rewards(self) -> torch.Tensor:
-        cube_pos_w = self.cube.data.root_state_w[:, :3]
+        cube_pos_w = self.green_cube.data.root_state_w[:, :3]
         #cube_pos_w[:, 2] += 0.1
 
-        cube_quat_w = self.cube.data.root_state_w[:, 3:7]
+        cube_quat_w = self.green_cube.data.root_state_w[:, 3:7]
 
         end_effector_pos_w = self.end_effector.data.target_pos_w[:, 0, :]
         end_effector_quat_w = self.end_effector.data.target_quat_w[:, 0, :]
 
-        force = self.gripper_contact.data.force_matrix_w
-        is_gripper_touch_cube = torch.linalg.norm(force, dim=-1) > 1.0
-        print(force.size())
-        print(torch.linalg.norm(force, dim=-1).size())
-        print("----------------")
+        gripper_joint_pos_from = self._previous_joint_pos[:, -1]
+        gripper_joint_pos_to = self.robot.data.joint_pos[:, -1]
+
+        gripper_contact_force = self.gripper_contact.data.force_matrix_w[:, 0, 0, :]
+        jaw_contact_force = self.jaw_contact.data.force_matrix_w[:, 0, 0, :]
+        is_gripper_touch_cube = torch.linalg.norm(gripper_contact_force, dim=-1) > 1.0
+        is_jaw_touch_cube = torch.linalg.norm(jaw_contact_force, dim=-1) > 1.0
+        is_gripper_jaw_touch_cube = is_gripper_touch_cube & is_jaw_touch_cube
+        #print(gripper_contact_force.size())
+        #print(torch.linalg.norm(gripper_contact_force, dim=-1).size())
+        #print("----------------")
 
         motion_reward = StackTaskReward.compute_reward(
             self.end_effector_pre_state[:, :3],
@@ -123,14 +131,16 @@ class StackTask(DirectRLEnv):
             end_effector_pos_w,
             end_effector_quat_w,
             cube_pos_w,
-            cube_quat_w
+            cube_quat_w,
+            gripper_joint_pos_from,
+            gripper_joint_pos_to,
+            is_gripper_jaw_touch_cube,
+            not self.cfg.is_training
         )
-
-        is_gripper_joint_open = (self.robot.data.joint_pos[:, -1] >= (torch.pi / 4)).float()
         
         penlty = self._get_action_rate_reward() * (-0.1) + self._joint_velocity_penalty() * (-0.05)
         
-        reward = motion_reward * 5 + is_gripper_joint_open + penlty
+        reward = motion_reward * 5 + penlty
         #print(motion_reward)
         #print("-----------------")
 
@@ -153,7 +163,7 @@ class StackTask(DirectRLEnv):
     def sample_cube_state(self, env_ids: torch.Tensor | None):
         sample_num = len(env_ids)
         
-        root_state = self.cube.data.default_root_state[env_ids]
+        root_state = self.green_cube.data.default_root_state[env_ids]
         root_state[:, :3] += self.terrain.env_origins[env_ids]
         
         offset_x = torch.empty(sample_num, device=self.device).uniform_(-0.1, 0.05)
@@ -170,7 +180,7 @@ class StackTask(DirectRLEnv):
 
         root_state[:, 3:7] = quat
 
-        self.cube.write_root_state_to_sim(root_state, env_ids)
+        self.green_cube.write_root_state_to_sim(root_state, env_ids)
 
         self.visual_marker_pos[env_ids] = root_state[:, :3] + torch.tensor([0.0, 0.0, 0.1], device=self.device)
         self.visual_marker_quat[env_ids] = root_state[:, 3:7]
@@ -204,7 +214,7 @@ class StackTask(DirectRLEnv):
         self._previous_joint_pos = self.robot.data.joint_pos.clone()
         self.end_effector_pre_state[env_ids, :3] = self.end_effector.data.target_pos_w[env_ids, 0, :].clone()
         self.end_effector_pre_state[env_ids, 3:7] = self.end_effector.data.target_quat_w[env_ids, 0, :].clone()
-        self.cube_pre_state[env_ids, :] = self.cube.data.root_state_w[env_ids, :7].clone()
+        self.cube_pre_state[env_ids, :] = self.green_cube.data.root_state_w[env_ids, :7].clone()
 
         '''
         cube_pos_w = self.cube.data.root_state_w[env_ids, :3]
