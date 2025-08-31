@@ -256,16 +256,10 @@ class MotionDetector:
         return (gripper_distance_from - gripper_distance_to) >= min_close
     
     @staticmethod
-    def is_closing_distance(gripper_distance_from: torch.Tensor,
-                    gripper_distance_to: torch.Tensor,
-                    min_close: float = 0.0025) -> torch.Tensor:
-        """
-        True if finger distance decreases by at least 'min_close'.
-        """
-        return (gripper_distance_to - gripper_distance_from) >= min_close
+    
     
     @staticmethod
-    def is_openning_joint_pos(gripper_distance_from: torch.Tensor,
+    def is_opening_joint_pos(gripper_distance_from: torch.Tensor,
                     gripper_distance_to: torch.Tensor,
                     min_close: float = 0.0025,
                     reversed: bool = False) -> torch.Tensor:

@@ -9,6 +9,8 @@ from isaaclab.utils import configclass
 from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from isaaclab.sensors import FrameTransformerCfg, OffsetCfg
 from isaaclab.sensors import ContactSensorCfg
+from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg
+from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
 
 from .so_arm_env_base_cfg import SO_ARM_101_BASE_ENV
 
@@ -25,26 +27,36 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
 
     green_cube:RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/GreenCube",
-        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.3, 0.0, 0.019], rot=[1, 0, 0, 0]),
-        spawn=sim_utils.CuboidCfg(
-            size=(0.038, 0.038, 0.038),
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(),
-            mass_props=sim_utils.MassPropertiesCfg(mass=1.0),
-            collision_props=sim_utils.CollisionPropertiesCfg(),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(0.0, 1.0, 0.0), metallic=0.2),
-        )
+        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.3, 0, 0.019], rot=[1, 0, 0, 0]),
+        spawn=UsdFileCfg(
+            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/green_block.usd",
+            scale=(0.76, 0.76, 0.76),
+            rigid_props=RigidBodyPropertiesCfg(
+                solver_position_iteration_count=16,
+                solver_velocity_iteration_count=1,
+                max_angular_velocity=1000.0,
+                max_linear_velocity=1000.0,
+                max_depenetration_velocity=5.0,
+                disable_gravity=False,
+            ),
+        ),
     )
 
     red_cube:RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/RedCube",
-        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.3, 0.0, 0.019], rot=[1, 0, 0, 0]),
-        spawn=sim_utils.CuboidCfg(
-            size=(0.038, 0.038, 0.038),
-            rigid_props=sim_utils.RigidBodyPropertiesCfg(),
-            mass_props=sim_utils.MassPropertiesCfg(mass=1.0),
-            collision_props=sim_utils.CollisionPropertiesCfg(),
-            visual_material=sim_utils.PreviewSurfaceCfg(diffuse_color=(1.0, 0.0, 0.0), metallic=0.2),
-        )
+        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.3, 0, 0.019], rot=[1, 0, 0, 0]),
+        spawn=UsdFileCfg(
+            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/red_block.usd",
+            scale=(0.76, 0.76, 0.76),
+            rigid_props=RigidBodyPropertiesCfg(
+                solver_position_iteration_count=16,
+                solver_velocity_iteration_count=1,
+                max_angular_velocity=1000.0,
+                max_linear_velocity=1000.0,
+                max_depenetration_velocity=5.0,
+                disable_gravity=False,
+            ),
+        ),
     )
 
     end_effector: FrameTransformerCfg = FrameTransformerCfg(
@@ -65,11 +77,11 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
     gripper_contact: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot/gripper_link",
         # Only care about contacts with the cube
-        filter_prim_paths_expr=["/World/envs/env_.*/GreenCube"]
+        filter_prim_paths_expr=["/World/envs/env_.*/GreenCube/Cube"]
     )
 
     jaw_contact: ContactSensorCfg = ContactSensorCfg(
         prim_path="/World/envs/env_.*/Robot/moving_jaw_so101_v1_link",
         # Only care about contacts with the cube
-        filter_prim_paths_expr=["/World/envs/env_.*/GreenCube"]
+        filter_prim_paths_expr=["/World/envs/env_.*/GreenCube/Cube"]
     )

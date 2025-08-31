@@ -33,12 +33,14 @@ class StackTask(DirectRLEnv):
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot)
         self.green_cube = RigidObject(self.cfg.green_cube)
+        self.red_cube = RigidObject(self.cfg.red_cube)
         self.end_effector = FrameTransformer(self.cfg.end_effector)
         self.gripper_contact = ContactSensor(self.cfg.gripper_contact)
         self.jaw_contact = ContactSensor(self.cfg.jaw_contact)
 
         self.scene.articulations["robot"] = self.robot
         self.scene.rigid_objects["green_cube"] = self.green_cube
+        self.scene.rigid_objects["red_cube"] = self.red_cube
         self.scene.sensors["end_effector"] = self.end_effector
         self.scene.sensors["gripper_contact"] = self.gripper_contact
         self.scene.sensors["jaw_contact"] = self.jaw_contact
@@ -121,8 +123,8 @@ class StackTask(DirectRLEnv):
         is_gripper_touch_cube = torch.linalg.norm(gripper_contact_force, dim=-1) > 1.0
         is_jaw_touch_cube = torch.linalg.norm(jaw_contact_force, dim=-1) > 1.0
         is_gripper_jaw_touch_cube = is_gripper_touch_cube & is_jaw_touch_cube
-        #print(gripper_contact_force.size())
-        #print(torch.linalg.norm(gripper_contact_force, dim=-1).size())
+        #print(gripper_contact_force)
+        #print(torch.linalg.norm(gripper_contact_force, dim=-1))
         #print("----------------")
 
         motion_reward = StackTaskReward.compute_reward(
@@ -160,17 +162,104 @@ class StackTask(DirectRLEnv):
         
         return False, time_out
     
+    def sample_in_ellipse_torch(self, n:int, a:float, b:float, angle:float=0.0,
+                            center=(0.0, 0.0), device="cpu", dtype=torch.float32):
+        """
+        Uniform samples inside an ellipse:
+        ((x-cx, y-cy) rotated by -angle) satisfies (x/a)^2 + (y/b)^2 <= 1
+        a,b > 0 are the semi-axes, angle in radians (counter-clockwise).
+        """
+        u = torch.rand(n, device=device, dtype=dtype)
+        v = torch.rand(n, device=device, dtype=dtype)
+        r = torch.sqrt(u)                         # area-uniform radius
+        theta = 2 * torch.pi * v
+        x = r * torch.cos(theta)
+        y = r * torch.sin(theta)
+
+        # scale to ellipse axes
+        x, y = a * x, b * y
+
+        # rotate by 'angle'
+        c, s = torch.cos(torch.tensor(angle, device=device, dtype=dtype)), torch.sin(torch.tensor(angle, device=device, dtype=dtype))
+        xr = c * x - s * y
+        yr = s * x + c * y
+
+        # translate
+        cx, cy = center
+        return xr + cx, yr + cy
+    
+    def _sample_pair_in_ellipse_far_enough(self, n:int, a:float, b:float,
+                                       min_sep:float, angle:float=0.0,
+                                       max_tries:int=32):
+        """
+        Returns four tensors: gx, gy, rx, ry (shape [n]) with both points in the
+        same ellipse and ||g - r|| >= min_sep (as much as possible).
+        """
+        # quick feasibility check (max possible separation ~ 2*max(a,b))
+        assert min_sep <= 2*max(a, b) + 1e-6, "min_sep too large for ellipse."
+
+        gx, gy = self.sample_in_ellipse_torch(n, a, b, angle=angle, device=self.device)
+        rx, ry = self.sample_in_ellipse_torch(n, a, b, angle=angle, device=self.device)
+        g = torch.stack([gx, gy], dim=-1)   # [n,2]
+        r = torch.stack([rx, ry], dim=-1)   # [n,2]
+
+        min_sep2 = min_sep * min_sep
+        tries = 0
+        # resample red where too close to green
+        while True:
+            d2 = (r - g).pow(2).sum(dim=-1)
+            bad = d2 < min_sep2
+            if not bad.any() or tries >= max_tries:
+                break
+            k = int(bad.sum())
+            rx_new, ry_new = self.sample_in_ellipse_torch(k, a, b, angle=angle, device=self.device)
+            r[bad] = torch.stack([rx_new, ry_new], dim=-1)
+            tries += 1
+
+        # Fallback: push remaining bad cases along the ray from green to red,
+        # and project to ellipse boundary if needed.
+        if bad.any():
+            delta = r[bad] - g[bad]
+            zero = delta.norm(dim=-1) < 1e-9
+            if zero.any():
+                ang = 2*torch.pi*torch.rand(int(zero.sum()), device=self.device)
+                delta[zero] = torch.stack([torch.cos(ang), torch.sin(ang)], dim=-1)
+            unit = delta / delta.norm(dim=-1, keepdim=True)
+            r_try = g[bad] + unit * min_sep
+
+            # Project to ellipse if outside: scale by 1/sqrt(Q(x)) where Q is ellipse quad. form.
+            c = torch.cos(torch.tensor(angle, device=self.device))
+            s = torch.sin(torch.tensor(angle, device=self.device))
+            xprime =  c*r_try[:, 0] + s*r_try[:, 1]
+            yprime = -s*r_try[:, 0] + c*r_try[:, 1]
+            val = (xprime / a)**2 + (yprime / b)**2
+            outside = val > 1.0
+            if outside.any():
+                scale = (1.0 / torch.sqrt(val[outside])).unsqueeze(-1)
+                r_try[outside] = r_try[outside] * scale
+            r[bad] = r_try
+
+        return g[:, 0], g[:, 1], r[:, 0], r[:, 1]
+    
     def sample_cube_state(self, env_ids: torch.Tensor | None):
         sample_num = len(env_ids)
         
-        root_state = self.green_cube.data.default_root_state[env_ids]
-        root_state[:, :3] += self.terrain.env_origins[env_ids]
-        
-        offset_x = torch.empty(sample_num, device=self.device).uniform_(-0.1, 0.05)
-        offset_y = torch.empty(sample_num, device=self.device).uniform_(-0.175, 0.175)
+        green_cube_root_state = self.green_cube.data.default_root_state[env_ids]
+        green_cube_root_state[:, :3] += self.terrain.env_origins[env_ids]
 
-        root_state[:, 0] += offset_x
-        root_state[:, 1] += offset_y
+        red_cube_root_state = self.red_cube.data.default_root_state[env_ids]
+        red_cube_root_state[:, :3] += self.terrain.env_origins[env_ids]
+        
+        a, b, angle = 0.05, 0.15, 0.0
+        gx, gy, rx, ry = self._sample_pair_in_ellipse_far_enough(
+            sample_num, a, b, 0.08, angle=angle
+        )
+
+        green_cube_root_state[:, 0] += gx
+        green_cube_root_state[:, 1] += gy
+
+        red_cube_root_state[:, 0] += rx
+        red_cube_root_state[:, 1] += ry
 
         euler_x = torch.empty(sample_num, device=self.device).fill_(0.0)
         euler_y = torch.empty(sample_num, device=self.device).fill_(0.0)
@@ -178,13 +267,10 @@ class StackTask(DirectRLEnv):
 
         quat = quat_from_euler_xyz(euler_x, euler_y, euler_z)
 
-        root_state[:, 3:7] = quat
+        green_cube_root_state[:, 3:7] = quat
 
-        self.green_cube.write_root_state_to_sim(root_state, env_ids)
-
-        self.visual_marker_pos[env_ids] = root_state[:, :3] + torch.tensor([0.0, 0.0, 0.1], device=self.device)
-        self.visual_marker_quat[env_ids] = root_state[:, 3:7]
-        self.visual_marker.visualize(self.visual_marker_pos, self.visual_marker_quat)
+        self.green_cube.write_root_state_to_sim(green_cube_root_state, env_ids)
+        self.red_cube.write_root_state_to_sim(red_cube_root_state, env_ids)
 
     def reset_robot(self, env_ids: torch.Tensor | None):
         joint_pos = self.robot.data.default_joint_pos[env_ids]
