@@ -27,7 +27,7 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
 
     green_cube:RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/GreenCube",
-        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.3, 0, 0.019], rot=[1, 0, 0, 0]),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.0, 0, 0.019], rot=[1, 0, 0, 0]),
         spawn=UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/green_block.usd",
             scale=(0.76, 0.76, 0.76),
@@ -44,7 +44,7 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
 
     red_cube:RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/RedCube",
-        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.3, 0, 0.019], rot=[1, 0, 0, 0]),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.0, 0, 0.019], rot=[1, 0, 0, 0]),
         spawn=UsdFileCfg(
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/red_block.usd",
             scale=(0.76, 0.76, 0.76),

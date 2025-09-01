@@ -22,14 +22,15 @@ class StackTaskReward:
         """
         # Tunables
         z_band = 0.15                   # meters regarded as "above"
-        xy_align_tol = 0.015            # lateral alignment tolerance for 'above'
-        move_to_cos = 0.5              # cosine threshold for 'moving toward'
-        reach_tol = 0.02               # m distance to count as reached
+        xy_align_tol = 0.05            # lateral alignment tolerance for 'above'
+        move_to_cos = 0.7              # cosine threshold for 'moving toward'
+        reach_tol = 0.015               # m distance to count as reached
         quat_align_deg = 25.0           # degrees for alignment
         quat_align_rad = quat_align_deg * torch.pi / 180.0
-        quat_improve_tol = 0.003        # rad improvement considered as "rotating to"
-        move_noise_tol = 0.002          # 'moving' magnitude to consider non-jitter
-        open_abs_thresh = torch.pi / 4  # absolute openness considered 'open enough' pre-grasp
+        quat_improve_tol = 0.01        # rad improvement considered as "rotating to"
+        move_noise_tol = 0.005          # 'moving' magnitude to consider non-jitter
+        open_abs_thresh = torch.pi / 4
+        closed_abs_thresh = torch.pi / 5  # absolute openness considered 'open enough' pre-grasp
         open_delta = 0.003              # active opening min delta
         close_delta = 0.003             # active closing min delta
 
@@ -41,16 +42,20 @@ class StackTaskReward:
 
         # Signals
         is_above = MotionDetector.is_above(
-            gripper_pos_to, target_pos, z_band=z_band, xy_align_tol=xy_align_tol
+            gripper_pos_to, target_pos, z_band=z_band, aligned=True, xy_align_tol=xy_align_tol
         )
 
-        is_moving_to_top = MotionDetector.is_moving_to(
+        is_gripper_moving_to_top = MotionDetector.is_moving_to(
             gripper_pos_from, gripper_pos_to, target_top, threshold=move_to_cos
         )
 
-        is_moving_to_target = MotionDetector.is_moving_to(
+        is_gripper_moving_to_target = MotionDetector.is_moving_to(
             gripper_pos_from, gripper_pos_to, target_pos, threshold=move_to_cos
         )
+
+        #is_target_moving_to_goal = MotionDetector.is_moving_to(
+        #    
+        #)
 
         is_reached = MotionDetector.is_reached(
             gripper_pos_to, target_pos, threshold=reach_tol
@@ -75,27 +80,36 @@ class StackTaskReward:
         pregrasp_open_ok = MotionDetector.is_gripper_opened(
             gripper_joint_pos_to, open_abs_thresh
         )
-        is_gripper_opening = actively_opening | ((~is_above) & pregrasp_open_ok)
+        is_gripper_opening = actively_opening | pregrasp_open_ok
 
-        is_gripper_closing = MotionDetector.is_closing_joint_pos(
+        actively_closing = MotionDetector.is_closing_joint_pos(
             gripper_joint_pos_from, gripper_joint_pos_to, min_close=close_delta
         )
+        pos_grasp_open_ok = MotionDetector.is_gripper_closed(
+            gripper_joint_pos_to, closed_abs_thresh
+        )
+        is_gripper_closing = actively_closing | pos_grasp_open_ok
 
-        stage_1 = (is_moving_to_top & (is_quat_aligned | is_rotating_to) &
+
+
+        stage_1 = (is_gripper_moving_to_top & (is_quat_aligned | is_rotating_to) &
                    is_gripper_opening & is_moving & (~is_above)).float() * 0.25
         
-        stage_2 = (is_moving_to_target & (is_quat_aligned | is_rotating_to) &
-                   is_gripper_opening & is_above).float() * 0.5
+        stage_2 = (is_gripper_moving_to_target & (is_quat_aligned | is_rotating_to) &
+                   is_gripper_opening & is_moving & is_above).float() * 0.5
 
         stage_3 = (is_reached & is_gripper_closing).float() * 0.75
 
         stage_4 = (is_grasped).float() * 1.0
 
-        reward = torch.stack([stage_1, stage_2, stage_3, stage_4], dim=0).max(dim=0).values
+        reward = torch.stack([stage_1, stage_2, stage_3], dim=0).max(dim=0).values
 
 
         if is_debug:
-            print(is_grasped)
+            print(reward)
+            print(is_gripper_moving_to_target)
+            print(is_above)
+            print(is_reached)
             print("-----------------")
         return reward
 
