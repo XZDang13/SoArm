@@ -8,21 +8,22 @@ project_root = os.path.dirname(os.path.abspath(__file__))
 
 SO_ARM_101_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{project_root}/assets/so101/configuration/so101_physics.usd",
+        usd_path=f"{project_root}/assets/so101/so101_follower.usd",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=True,
-            solver_position_iteration_count=8,
+            solver_position_iteration_count=32,
             solver_velocity_iteration_count=1,
             fix_root_link=True
         ),
     ),
 
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.0028),
+        pos=(0.0, 0.0, -0.03),
+        rot=(1.0, 0.0, 0.0, 0.0),
         joint_pos={
             "shoulder_pan": 0.0,
             "shoulder_lift": 0.0,#-1.740,

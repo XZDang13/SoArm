@@ -31,7 +31,7 @@ class StackTask(DirectRLEnv):
         self.end_effector_pre_state = torch.zeros(self.num_envs, 7, device=self.device)
         self.cube_pre_state = torch.zeros(self.num_envs, 7, device=self.device)
 
-        self.goal_pos = torch.as_tensor([0.23, 0.0, 0.08], device=self.device)
+        self.goal_pos = torch.as_tensor([0.0, -0.23, 0.08], device=self.device)
         self.goal_quat = torch.as_tensor([1.0, 0.0, 0.0, 0.0], device=self.device)
 
     def _setup_scene(self):
@@ -72,14 +72,9 @@ class StackTask(DirectRLEnv):
         self._previous_actions = self._actions.clone()
 
         cube_pos_w = self.green_cube.data.root_state_w[:, :3]
-        cube_quat_w = self.green_cube.data.root_state_w[:, 3:7]
+        cube_quat_b = self.green_cube.data.root_state_w[:, 3:7]
         
-        cube_pos_b, cube_quat_b = subtract_frame_transforms(
-            self.robot.data.root_state_w[:, :3], 
-            self.robot.data.root_state_w[:, 3:7], 
-            cube_pos_w, 
-            cube_quat_w
-        )
+        cube_pos_b = cube_pos_w - self.terrain.env_origins
 
         cube_quat_b = map_to_yaw_rep(cube_quat_b, xyzw=False)
 
@@ -125,9 +120,8 @@ class StackTask(DirectRLEnv):
         gripper_joint_pos_from = self._previous_joint_pos[:, -1]
         gripper_joint_pos_to = self.robot.data.joint_pos[:, -1]
 
-        robot_base_state = self.robot.data.root_state_w
-        goal_pos = robot_base_state[:, :3] + self.goal_pos
-        goal_quat = self.goal_quat.expand_as(robot_base_state[:, 3:7])
+        goal_pos = self.terrain.env_origins + self.goal_pos
+        goal_quat = self.goal_quat.expand_as(end_effector_quat_w)
 
         gripper_contact_force = self.gripper_contact.data.force_matrix_w[:, 0, 0, :]
         jaw_contact_force = self.jaw_contact.data.force_matrix_w[:, 0, 0, :]
@@ -155,9 +149,9 @@ class StackTask(DirectRLEnv):
             not self.cfg.is_training
         )
         
-        penlty = self._joint_velocity_penalty() * (-0.01)
+        penlty = self._joint_velocity_penalty() * (-0.0025)
         
-        reward = motion_reward + penlty
+        reward = motion_reward * 5
         #print(motion_reward)
         #print("-----------------")
 
@@ -213,7 +207,7 @@ class StackTask(DirectRLEnv):
         green_cube_root_state[:, :3] += self.terrain.env_origins[env_ids]
 
         offset_x, offset_y = self.sample_in_annular_sector(sample_num, 0.225, 0.325,
-                                                           -torch.pi/4, torch.pi/4, device=self.device)
+                                                           -2.3561945, -0.7853982, device=self.device)
         
         green_cube_root_state[:, 0] += offset_x
         green_cube_root_state[:, 1] += offset_y

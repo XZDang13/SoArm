@@ -32,7 +32,7 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/green_block.usd",
             scale=(0.76, 0.76, 0.76),
             rigid_props=RigidBodyPropertiesCfg(
-                solver_position_iteration_count=16,
+                solver_position_iteration_count=64,
                 solver_velocity_iteration_count=1,
                 max_angular_velocity=1000.0,
                 max_linear_velocity=1000.0,
@@ -49,7 +49,7 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
             usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/red_block.usd",
             scale=(0.76, 0.76, 0.76),
             rigid_props=RigidBodyPropertiesCfg(
-                solver_position_iteration_count=16,
+                solver_position_iteration_count=64,
                 solver_velocity_iteration_count=1,
                 max_angular_velocity=1000.0,
                 max_linear_velocity=1000.0,
@@ -60,12 +60,12 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
     )
 
     end_effector: FrameTransformerCfg = FrameTransformerCfg(
-        prim_path="/World/envs/env_.*/Robot/base_link",
+        prim_path="/World/envs/env_.*/Robot/base",
         debug_vis=True,
         visualizer_cfg=FRAME_MARKER_SMALL_CFG.replace(prim_path="/Visuals/EndEffectorFrameTransformer"),
         target_frames=[
             FrameTransformerCfg.FrameCfg(
-                prim_path="/World/envs/env_.*/Robot/gripper_link",
+                prim_path="/World/envs/env_.*/Robot/gripper",
                 name="tcp",
                 offset=OffsetCfg((0.02, 0.0, -0.095))
             )
@@ -75,13 +75,13 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
     gripper_marker = FRAME_MARKER_SMALL_CFG.replace(prim_path="/Visuals/Command/goal_pose")
 
     gripper_contact: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/gripper_link",
+        prim_path="/World/envs/env_.*/Robot/gripper",
         # Only care about contacts with the cube
         filter_prim_paths_expr=["/World/envs/env_.*/GreenCube/Cube"]
     )
 
     jaw_contact: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/moving_jaw_so101_v1_link",
+        prim_path="/World/envs/env_.*/Robot/jaw",
         # Only care about contacts with the cube
         filter_prim_paths_expr=["/World/envs/env_.*/GreenCube/Cube"]
     )

@@ -63,7 +63,7 @@ class Trainer:
         for i in range(1000):
             action = self.get_action(obs_dict)
             #print(action)
-            #action = torch.zeros_like(action)
+            
             next_obs_dict, reward, terminate, timeout, info = self.env.step(action)
             done = terminate | timeout
             obs_dict = next_obs_dict

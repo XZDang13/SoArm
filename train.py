@@ -77,12 +77,12 @@ class Trainer:
         
         self.obs = None
 
-        self.epochs = 100
+        self.epochs = 200
         self.update_iteration = 50
         self.batch_size = self.env_nums * 10
         self.gamma = 0.99
         self.tau = 0.005
-        self.regularization_weight = 0
+        self.regularization_weight = 1e-3
 
         self.std = 1
 
