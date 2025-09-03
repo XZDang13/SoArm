@@ -7,8 +7,12 @@ class StackTaskReward:
                        gripper_quat_from: torch.Tensor,
                        gripper_pos_to: torch.Tensor,
                        gripper_quat_to: torch.Tensor,
-                       target_pos: torch.Tensor,
-                       target_quat: torch.Tensor,
+                       target_pos_from: torch.Tensor,
+                       target_quat_from: torch.Tensor,
+                       target_pos_to: torch.Tensor,
+                       target_quat_to: torch.Tensor,
+                       goal_pos: torch.Tensor,
+                       goal_quat: torch.Tensor,
                        gripper_joint_pos_from: torch.Tensor,
                        gripper_joint_pos_to: torch.Tensor,
                        is_grasped: torch.Tensor,
@@ -22,55 +26,66 @@ class StackTaskReward:
         """
         # Tunables
         z_band = 0.15                   # meters regarded as "above"
-        xy_align_tol = 0.05            # lateral alignment tolerance for 'above'
-        move_to_cos = 0.7              # cosine threshold for 'moving toward'
-        reach_tol = 0.015               # m distance to count as reached
-        quat_align_deg = 25.0           # degrees for alignment
+        xy_align_tol = 0.045            # lateral alignment tolerance for 'above'
+        move_to_cos = 0.65            # cosine threshold for 'moving toward'
+        reach_tol = 0.025               # m distance to count as reached
+        quat_align_deg = 20.0           # degrees for alignment
         quat_align_rad = quat_align_deg * torch.pi / 180.0
         quat_improve_tol = 0.01        # rad improvement considered as "rotating to"
-        move_noise_tol = 0.005          # 'moving' magnitude to consider non-jitter
-        open_abs_thresh = torch.pi / 4
-        closed_abs_thresh = torch.pi / 5  # absolute openness considered 'open enough' pre-grasp
+        move_noise_tol = 0.002          # 'moving' magnitude to consider non-jitter
+        open_abs_thresh = torch.pi / 4  # absolute openness considered 'open enough' pre-grasp
         open_delta = 0.003              # active opening min delta
         close_delta = 0.003             # active closing min delta
 
         # Derived targets
         # "top" position: directly above target by z offset
-        top_offset = torch.zeros_like(target_pos)
+        top_offset = torch.zeros_like(target_pos_from)
         top_offset[..., 2] = z_band  # reuse z_band as nominal vertical offset
-        target_top = target_pos + top_offset
+        target_top = target_pos_from + top_offset
 
         # Signals
-        is_above = MotionDetector.is_above(
-            gripper_pos_to, target_pos, z_band=z_band, aligned=True, xy_align_tol=xy_align_tol
+        is_gripper_above_target = MotionDetector.is_above(
+            gripper_pos_to, target_pos_from, z_band=z_band, aligned=True, xy_align_tol=xy_align_tol
         )
 
-        is_gripper_moving_to_top = MotionDetector.is_moving_to(
+        is_gripper_moving_to_target_top = MotionDetector.is_moving_to(
             gripper_pos_from, gripper_pos_to, target_top, threshold=move_to_cos
         )
 
         is_gripper_moving_to_target = MotionDetector.is_moving_to(
-            gripper_pos_from, gripper_pos_to, target_pos, threshold=move_to_cos
+            gripper_pos_from, gripper_pos_to, target_pos_from, threshold=move_to_cos
         )
 
-        #is_target_moving_to_goal = MotionDetector.is_moving_to(
-        #    
-        #)
+        is_target_moving_to_goal = MotionDetector.is_moving_to(
+            target_pos_from, target_pos_to, goal_pos, threshold=move_to_cos    
+        )
 
-        is_reached = MotionDetector.is_reached(
-            gripper_pos_to, target_pos, threshold=reach_tol
+        is_gripper_reached_target = MotionDetector.is_reached(
+            gripper_pos_to, target_pos_to, threshold=reach_tol
+        )
+
+        is_target_reached_goal = MotionDetector.is_reached(
+            target_pos_to, goal_pos, threshold=reach_tol
         )
 
         is_moving = MotionDetector.is_moving(
             gripper_pos_from, gripper_pos_to, threshold=move_noise_tol
         )
 
-        is_rotating_to = MotionDetector.is_rotating_to_quat(
-            gripper_quat_from, gripper_quat_to, target_quat, tol_decrease=quat_improve_tol
+        is_girpper_rotating_to_target = MotionDetector.is_rotating_to_quat(
+            gripper_quat_from, gripper_quat_to, target_quat_from, tol_decrease=quat_improve_tol
         )
 
-        is_quat_aligned = MotionDetector.is_quat_reached(
-            gripper_quat_to, target_quat, threshold_rad=quat_align_rad
+        is_gripper_quat_aligned_target = MotionDetector.is_quat_reached(
+            gripper_quat_to, target_quat_to, threshold_rad=quat_align_rad
+        )
+
+        is_target_rotating_to_goal = MotionDetector.is_rotating_to_quat(
+            target_quat_from, target_quat_to, goal_quat, tol_decrease=quat_improve_tol
+        )
+
+        is_target_quat_aligned_goal = MotionDetector.is_quat_reached(
+            target_quat_to, goal_quat, threshold_rad=quat_align_rad
         )
 
         # Opening/closing semantics
@@ -85,31 +100,27 @@ class StackTaskReward:
         actively_closing = MotionDetector.is_closing_joint_pos(
             gripper_joint_pos_from, gripper_joint_pos_to, min_close=close_delta
         )
-        pos_grasp_open_ok = MotionDetector.is_gripper_closed(
-            gripper_joint_pos_to, closed_abs_thresh
-        )
-        is_gripper_closing = actively_closing | pos_grasp_open_ok
 
-
-
-        stage_1 = (is_gripper_moving_to_top & (is_quat_aligned | is_rotating_to) &
-                   is_gripper_opening & is_moving & (~is_above)).float() * 0.25
+        stage_1 = (is_gripper_moving_to_target_top & (is_gripper_quat_aligned_target | is_girpper_rotating_to_target) &
+                   is_gripper_opening & is_moving & (~is_gripper_above_target)).float() * 0.2
         
-        stage_2 = (is_gripper_moving_to_target & (is_quat_aligned | is_rotating_to) &
-                   is_gripper_opening & is_moving & is_above).float() * 0.5
+        stage_2 = (is_gripper_moving_to_target & (is_gripper_quat_aligned_target | is_girpper_rotating_to_target) &
+                   is_gripper_opening & is_moving & is_gripper_above_target).float() * 0.4
 
-        stage_3 = (is_reached & is_gripper_closing).float() * 0.75
+        stage_3 = (is_gripper_reached_target & actively_closing).float() * 0.6
 
-        stage_4 = (is_grasped).float() * 1.0
+        stage_4 = (is_grasped & is_gripper_reached_target).float() * 0.8
 
-        reward = torch.stack([stage_1, stage_2, stage_3], dim=0).max(dim=0).values
+        stage_5 = (is_target_reached_goal).float() * 1.0
+        
+
+        reward = torch.stack([stage_1, stage_2, stage_3, stage_4], dim=0).max(dim=0).values
 
 
         if is_debug:
             print(reward)
             print(is_gripper_moving_to_target)
-            print(is_above)
-            print(is_reached)
+            print(is_gripper_above_target)
             print("-----------------")
         return reward
 

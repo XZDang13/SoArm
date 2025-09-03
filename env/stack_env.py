@@ -11,6 +11,7 @@ from isaaclab.utils.math import (subtract_frame_transforms, quat_from_euler_xyz,
                                  euler_xyz_from_quat)
 
 from .stack_cfg import STACK_TASK_CFG
+from .utils import map_to_yaw_rep
 from reward.stack_task import StackTaskReward
 
 class StackTask(DirectRLEnv):
@@ -29,6 +30,9 @@ class StackTask(DirectRLEnv):
 
         self.end_effector_pre_state = torch.zeros(self.num_envs, 7, device=self.device)
         self.cube_pre_state = torch.zeros(self.num_envs, 7, device=self.device)
+
+        self.goal_pos = torch.as_tensor([0.23, 0.0, 0.08], device=self.device)
+        self.goal_quat = torch.as_tensor([1.0, 0.0, 0.0, 0.0], device=self.device)
 
     def _setup_scene(self):
         self.robot = Articulation(self.cfg.robot)
@@ -77,6 +81,8 @@ class StackTask(DirectRLEnv):
             cube_quat_w
         )
 
+        cube_quat_b = map_to_yaw_rep(cube_quat_b, xyzw=False)
+
         joint_pos = self.robot.data.joint_pos.clone()
         previous_joint_pos = self._previous_joint_pos.clone()              
         previous_actions = self._previous_actions.clone()
@@ -111,12 +117,17 @@ class StackTask(DirectRLEnv):
         #cube_pos_w[:, 2] += 0.1
 
         cube_quat_w = self.green_cube.data.root_state_w[:, 3:7]
+        cube_quat_w = map_to_yaw_rep(cube_quat_w, xyzw=False)
 
         end_effector_pos_w = self.end_effector.data.target_pos_w[:, 0, :]
         end_effector_quat_w = self.end_effector.data.target_quat_w[:, 0, :]
 
         gripper_joint_pos_from = self._previous_joint_pos[:, -1]
         gripper_joint_pos_to = self.robot.data.joint_pos[:, -1]
+
+        robot_base_state = self.robot.data.root_state_w
+        goal_pos = robot_base_state[:, :3] + self.goal_pos
+        goal_quat = self.goal_quat.expand_as(robot_base_state[:, 3:7])
 
         gripper_contact_force = self.gripper_contact.data.force_matrix_w[:, 0, 0, :]
         jaw_contact_force = self.jaw_contact.data.force_matrix_w[:, 0, 0, :]
@@ -132,17 +143,21 @@ class StackTask(DirectRLEnv):
             self.end_effector_pre_state[:, 3:7],
             end_effector_pos_w,
             end_effector_quat_w,
+            self.cube_pre_state[:, :3],
+            self.cube_pre_state[:, 3:7],
             cube_pos_w,
             cube_quat_w,
+            goal_pos,
+            goal_quat,
             gripper_joint_pos_from,
             gripper_joint_pos_to,
             is_gripper_jaw_touch_cube,
             not self.cfg.is_training
         )
         
-        penlty = self._get_action_rate_reward() * (-0.1) + self._joint_velocity_penalty() * (-0.05)
+        penlty = self._joint_velocity_penalty() * (-0.01)
         
-        reward = motion_reward * 5 + penlty
+        reward = motion_reward + penlty
         #print(motion_reward)
         #print("-----------------")
 

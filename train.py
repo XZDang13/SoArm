@@ -77,14 +77,14 @@ class Trainer:
         
         self.obs = None
 
-        self.epochs = 250
+        self.epochs = 100
         self.update_iteration = 50
         self.batch_size = self.env_nums * 10
         self.gamma = 0.99
         self.tau = 0.005
-        self.regularization_weight = 1
+        self.regularization_weight = 0
 
-        self.std = 1e-1
+        self.std = 1
 
     @torch.no_grad()
     def get_action(self, obs_batch:list[list[float]], deterministic:bool=False):

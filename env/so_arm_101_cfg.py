@@ -8,15 +8,15 @@ project_root = os.path.dirname(os.path.abspath(__file__))
 
 SO_ARM_101_CFG = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path=f"{project_root}/assets/so101/so101.usd",
+        usd_path=f"{project_root}/assets/so101/configuration/so101_physics.usd",
         activate_contact_sensors=True,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False
         ),
         articulation_props=sim_utils.ArticulationRootPropertiesCfg(
             enabled_self_collisions=True,
-            solver_position_iteration_count=4,
-            solver_velocity_iteration_count=4,
+            solver_position_iteration_count=8,
+            solver_velocity_iteration_count=1,
             fix_root_link=True
         ),
     ),

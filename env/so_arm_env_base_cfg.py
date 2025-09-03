@@ -12,7 +12,7 @@ from .so_arm_101_cfg import SO_ARM_101_CFG
 class SO_ARM_101_BASE_ENV(DirectRLEnvCfg):
     episode_length_s = 10.0
 
-    decimation = 2
+    decimation = 4
 
     observation_space = 12
     action_space = 6
@@ -23,7 +23,7 @@ class SO_ARM_101_BASE_ENV(DirectRLEnvCfg):
     is_training = True
 
     sim: SimulationCfg = SimulationCfg(
-        dt=1 / 60,
+        dt=1 / 120,
         render_interval=decimation,
         physics_material=sim_utils.RigidBodyMaterialCfg(
             friction_combine_mode="multiply",
@@ -32,6 +32,9 @@ class SO_ARM_101_BASE_ENV(DirectRLEnvCfg):
             dynamic_friction=1.0,
             restitution=0.0,
         ),
+        physx=sim_utils.PhysxCfg(
+            enable_ccd=True
+        )
     )
 
     terrain = TerrainImporterCfg(
