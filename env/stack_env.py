@@ -93,8 +93,7 @@ class StackTask(DirectRLEnv):
             cube_pos_b,#3
             cube_quat_b,#4
             joint_pos, #6
-            previous_joint_pos, #6
-            previous_actions, #6
+            previous_joint_pos
         ], dim=-1)
 
         #end_effector_pos = self.end_effector.data.target_pos_source[:, 0, :]
@@ -149,9 +148,9 @@ class StackTask(DirectRLEnv):
             not self.cfg.is_training
         )
         
-        penlty = self._joint_velocity_penalty() * (-0.0025)
+        penlty = self._joint_velocity_penalty() + self._get_action_rate_reward()
         
-        reward = motion_reward * 5
+        reward = motion_reward * 5 + penlty * (-0.005)
         #print(motion_reward)
         #print("-----------------")
 

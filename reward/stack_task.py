@@ -27,12 +27,12 @@ class StackTaskReward:
         # Tunables
         z_band = 0.15                   # meters regarded as "above"
         xy_align_tol = 0.045            # lateral alignment tolerance for 'above'
-        move_to_cos = 0.75            # cosine threshold for 'moving toward'
-        reach_tol = 0.025               # m distance to count as reached
+        move_to_cos = 0.5            # cosine threshold for 'moving toward'
+        reach_tol = 0.03               # m distance to count as reached
         quat_align_deg = 20.0           # degrees for alignment
         quat_align_rad = quat_align_deg * torch.pi / 180.0
         quat_improve_tol = 0.01        # rad improvement considered as "rotating to"
-        move_noise_tol = 0.002          # 'moving' magnitude to consider non-jitter
+        move_noise_tol = 0.005          # 'moving' magnitude to consider non-jitter
         open_abs_thresh = torch.pi / 4  # absolute openness considered 'open enough' pre-grasp
         open_delta = 0.003              # active opening min delta
         close_delta = 0.003             # active closing min delta
@@ -107,14 +107,14 @@ class StackTaskReward:
         stage_2 = (is_gripper_moving_to_target & (is_gripper_quat_aligned_target | is_girpper_rotating_to_target) &
                    is_gripper_opening & is_moving & is_gripper_above_target).float() * 0.4
 
-        stage_3 = (is_gripper_reached_target).float() * 0.6
+        stage_3 = (is_gripper_reached_target & actively_closing).float() * 0.6
 
-        stage_4 = (is_grasped & is_target_moving_to_goal).float() * 0.8
+        stage_4 = (is_grasped & is_moving & is_target_moving_to_goal).float() * 0.8
 
         stage_5 = (is_target_reached_goal).float() * 1.0
         
 
-        reward = torch.stack([stage_1, stage_2, stage_3], dim=0).max(dim=0).values
+        reward = torch.stack([stage_1, stage_2, stage_3, stage_4, stage_5], dim=0).max(dim=0).values
 
 
         if is_debug:
