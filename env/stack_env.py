@@ -82,12 +82,12 @@ class StackTask(DirectRLEnv):
         previous_joint_pos = self._previous_joint_pos.clone()              
         previous_actions = self._previous_actions.clone()
 
-        if self.cfg.is_training:
-            cube_pos_b += torch.randn_like(cube_pos_b) * 0.01
-            cube_quat_b += torch.randn_like(cube_quat_b) * 0.01
-            joint_pos += torch.randn_like(joint_pos) * 0.01
-            previous_joint_pos += torch.randn_like(previous_joint_pos) * 0.01
-            previous_actions += torch.randn_like(previous_actions) * 0.01             
+        #if self.cfg.is_training:
+        #    cube_pos_b += torch.randn_like(cube_pos_b) * 0.01
+        #    cube_quat_b += torch.randn_like(cube_quat_b) * 0.01
+        #    joint_pos += torch.randn_like(joint_pos) * 0.01
+        #    previous_joint_pos += torch.randn_like(previous_joint_pos) * 0.01
+        #    previous_actions += torch.randn_like(previous_actions) * 0.01             
 
         obs = torch.cat([
             cube_pos_b,#3
@@ -136,8 +136,6 @@ class StackTask(DirectRLEnv):
             self.end_effector_pre_state[:, 3:7],
             end_effector_pos_w,
             end_effector_quat_w,
-            self.cube_pre_state[:, :3],
-            self.cube_pre_state[:, 3:7],
             cube_pos_w,
             cube_quat_w,
             goal_pos,
@@ -148,9 +146,9 @@ class StackTask(DirectRLEnv):
             not self.cfg.is_training
         )
         
-        penlty = self._joint_velocity_penalty() + self._get_action_rate_reward()
+        penlty = self._joint_velocity_penalty() + self._get_action_rate_reward() + self._difference_to_default_reward()
         
-        reward = motion_reward * 5 + penlty * (-0.005)
+        reward = motion_reward * 2.5 + penlty * (-0.01)
         #print(motion_reward)
         #print("-----------------")
 

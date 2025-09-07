@@ -7,10 +7,8 @@ class StackTaskReward:
                        gripper_quat_from: torch.Tensor,
                        gripper_pos_to: torch.Tensor,
                        gripper_quat_to: torch.Tensor,
-                       target_pos_from: torch.Tensor,
-                       target_quat_from: torch.Tensor,
-                       target_pos_to: torch.Tensor,
-                       target_quat_to: torch.Tensor,
+                       target_pos: torch.Tensor,
+                       target_quat: torch.Tensor,
                        goal_pos: torch.Tensor,
                        goal_quat: torch.Tensor,
                        gripper_joint_pos_from: torch.Tensor,
@@ -39,13 +37,13 @@ class StackTaskReward:
 
         # Derived targets
         # "top" position: directly above target by z offset
-        top_offset = torch.zeros_like(target_pos_from)
+        top_offset = torch.zeros_like(target_pos)
         top_offset[..., 2] = z_band  # reuse z_band as nominal vertical offset
-        target_top = target_pos_from + top_offset
+        target_top = target_pos + top_offset
 
         # Signals
         is_gripper_above_target = MotionDetector.is_above(
-            gripper_pos_to, target_pos_from, z_band=z_band, aligned=True, xy_align_tol=xy_align_tol
+            gripper_pos_to, target_pos, z_band=z_band, aligned=True, xy_align_tol=xy_align_tol
         )
 
         is_gripper_moving_to_target_top = MotionDetector.is_moving_to(
@@ -53,7 +51,7 @@ class StackTaskReward:
         )
 
         is_gripper_moving_to_target = MotionDetector.is_moving_to(
-            gripper_pos_from, gripper_pos_to, target_pos_from, threshold=move_to_cos
+            gripper_pos_from, gripper_pos_to, target_pos, threshold=move_to_cos
         )
 
         is_target_moving_to_goal = MotionDetector.is_moving_to(
@@ -61,11 +59,11 @@ class StackTaskReward:
         )
 
         is_gripper_reached_target = MotionDetector.is_reached(
-            gripper_pos_to, target_pos_to, threshold=reach_tol
+            gripper_pos_to, target_pos, threshold=reach_tol
         )
 
         is_target_reached_goal = MotionDetector.is_reached(
-            target_pos_to, goal_pos, threshold=reach_tol
+            target_pos, goal_pos, threshold=reach_tol
         )
 
         is_moving = MotionDetector.is_moving(
@@ -73,19 +71,11 @@ class StackTaskReward:
         )
 
         is_girpper_rotating_to_target = MotionDetector.is_rotating_to_quat(
-            gripper_quat_from, gripper_quat_to, target_quat_from, tol_decrease=quat_improve_tol
+            gripper_quat_from, gripper_quat_to, target_quat, tol_decrease=quat_improve_tol
         )
 
         is_gripper_quat_aligned_target = MotionDetector.is_quat_reached(
-            gripper_quat_to, target_quat_to, threshold_rad=quat_align_rad
-        )
-
-        is_target_rotating_to_goal = MotionDetector.is_rotating_to_quat(
-            target_quat_from, target_quat_to, goal_quat, tol_decrease=quat_improve_tol
-        )
-
-        is_target_quat_aligned_goal = MotionDetector.is_quat_reached(
-            target_quat_to, goal_quat, threshold_rad=quat_align_rad
+            gripper_quat_to, target_quat, threshold_rad=quat_align_rad
         )
 
         # Opening/closing semantics

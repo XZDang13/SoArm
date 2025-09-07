@@ -27,8 +27,10 @@ from RLAlg.alg.ddpg_double_q import DDPGDoubleQ
 from RLAlg.utils import set_seed_everywhere
 from RLAlg.buffer.replay_buffer import ReplayBuffer
 from RLAlg.nn.steps import DeterministicContinuousPolicyStep, ValueStep
+from RLAlg.utils import set_seed_everywhere
 
 from model.actor_critic import EncoderNet, StochasticDDPGActor, Critic
+
 
 from env.reach_cfg import REACH_TASK_CFG
 from env.stack_cfg import STACK_TASK_CFG
@@ -40,6 +42,8 @@ def process_obs(obs):
 
 class Trainer:
     def __init__(self):
+        set_seed_everywhere(0)
+
         cfg = STACK_TASK_CFG()
         cfg.scene.num_envs = 256
         self.env = gymnasium.make("STACK-v0", cfg=cfg)
@@ -77,12 +81,12 @@ class Trainer:
         
         self.obs = None
 
-        self.epochs = 200
+        self.epochs = 250
         self.update_iteration = 50
         self.batch_size = self.env_nums * 10
         self.gamma = 0.995
         self.tau = 0.005
-        self.regularization_weight = 1e-4
+        self.regularization_weight = 5e-3
 
         self.std = 1
 
