@@ -31,7 +31,7 @@ class StackTask(DirectRLEnv):
         self.end_effector_pre_state = torch.zeros(self.num_envs, 7, device=self.device)
         self.cube_pre_state = torch.zeros(self.num_envs, 7, device=self.device)
 
-        self.goal_pos = torch.as_tensor([0.0, -0.23, 0.08], device=self.device)
+        self.goal_pos = torch.as_tensor([0.23, 0.0, 0.08], device=self.device)
         self.goal_quat = torch.as_tensor([1.0, 0.0, 0.0, 0.0], device=self.device)
 
     def _setup_scene(self):
@@ -72,15 +72,19 @@ class StackTask(DirectRLEnv):
         self._previous_actions = self._actions.clone()
 
         cube_pos_w = self.green_cube.data.root_state_w[:, :3]
-        cube_quat_b = self.green_cube.data.root_state_w[:, 3:7]
+        cube_quat_w = self.green_cube.data.root_state_w[:, 3:7]
         
-        cube_pos_b = cube_pos_w - self.terrain.env_origins
+        cube_pos_b, cube_quat_b = subtract_frame_transforms(
+            self.robot.data.root_state_w[:, :3], 
+            self.robot.data.root_state_w[:, 3:7], 
+            cube_pos_w, 
+            cube_quat_w
+        )
 
         cube_quat_b = map_to_yaw_rep(cube_quat_b, xyzw=False)
 
         joint_pos = self.robot.data.joint_pos.clone()
-        previous_joint_pos = self._previous_joint_pos.clone()              
-        previous_actions = self._previous_actions.clone()
+        previous_joint_pos = self._previous_joint_pos.clone()
 
         #if self.cfg.is_training:
         #    cube_pos_b += torch.randn_like(cube_pos_b) * 0.01
@@ -204,7 +208,7 @@ class StackTask(DirectRLEnv):
         green_cube_root_state[:, :3] += self.terrain.env_origins[env_ids]
 
         offset_x, offset_y = self.sample_in_annular_sector(sample_num, 0.225, 0.325,
-                                                           -2.3561945, -0.7853982, device=self.device)
+                                                           -torch.pi/3, torch.pi/3, device=self.device)
         
         green_cube_root_state[:, 0] += offset_x
         green_cube_root_state[:, 1] += offset_y

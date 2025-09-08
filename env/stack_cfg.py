@@ -60,12 +60,12 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
     )
 
     end_effector: FrameTransformerCfg = FrameTransformerCfg(
-        prim_path="/World/envs/env_.*/Robot/base",
+        prim_path="/World/envs/env_.*/Robot/base_link",
         debug_vis=True,
         visualizer_cfg=FRAME_MARKER_SMALL_CFG.replace(prim_path="/Visuals/EndEffectorFrameTransformer"),
         target_frames=[
             FrameTransformerCfg.FrameCfg(
-                prim_path="/World/envs/env_.*/Robot/gripper",
+                prim_path="/World/envs/env_.*/Robot/gripper_link",
                 name="tcp",
                 offset=OffsetCfg((0.02, 0.0, -0.095))
             )
@@ -75,13 +75,13 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
     gripper_marker = FRAME_MARKER_SMALL_CFG.replace(prim_path="/Visuals/Command/goal_pose")
 
     gripper_contact: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/gripper",
+        prim_path="/World/envs/env_.*/Robot/gripper_link",
         # Only care about contacts with the cube
         filter_prim_paths_expr=["/World/envs/env_.*/GreenCube/Cube"]
     )
 
     jaw_contact: ContactSensorCfg = ContactSensorCfg(
-        prim_path="/World/envs/env_.*/Robot/jaw",
+        prim_path="/World/envs/env_.*/Robot/moving_jaw_so101_v1_link",
         # Only care about contacts with the cube
         filter_prim_paths_expr=["/World/envs/env_.*/GreenCube/Cube"]
     )

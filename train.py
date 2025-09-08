@@ -14,10 +14,11 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 """Rest everything follows."""
-
+import os
 import gymnasium
 import torch
 import torch.optim as optim
+from isaaclab.utils.io import dump_yaml
 
 import numpy as np
 
@@ -44,9 +45,9 @@ class Trainer:
     def __init__(self):
         set_seed_everywhere(0)
 
-        cfg = STACK_TASK_CFG()
-        cfg.scene.num_envs = 256
-        self.env = gymnasium.make("STACK-v0", cfg=cfg)
+        self.cfg = STACK_TASK_CFG()
+        self.cfg.scene.num_envs = 256
+        self.env = gymnasium.make("STACK-v0", cfg=self.cfg)
 
         self.env_nums, self.obs_dim = self.env.observation_space.shape
 
@@ -89,6 +90,8 @@ class Trainer:
         self.regularization_weight = 5e-3
 
         self.std = 1
+
+        dump_yaml(f"{os.getcwd()}/env.yaml", self.cfg)
 
     @torch.no_grad()
     def get_action(self, obs_batch:list[list[float]], deterministic:bool=False):
@@ -182,7 +185,6 @@ class Trainer:
             self.std = (1-mix) * 1 + mix * 0.1
 
         torch.save([self.encoder.state_dict(), self.actor.state_dict(), self.critic.state_dict()], "model.pth")
-        
 
 def main():
     trainer = Trainer()
