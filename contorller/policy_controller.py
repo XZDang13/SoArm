@@ -74,7 +74,7 @@ class PolicyController(BaseController):
         self.load_config()
 
         self.cube = cube
-        self._action_scale = 0.2
+        self._action_scale = 0.25
         self._policy_counter = 0
 
     def load_policy(self):
