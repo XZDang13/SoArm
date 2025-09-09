@@ -4,39 +4,35 @@ simulation_app = SimulationApp({"headless": False})  # start the simulation app,
 
 import sys
 
-import torch
-from model.actor_critic import EncoderNet, StochasticDDPGActor
-from RLAlg.nn.steps import DeterministicContinuousPolicyStep
-
 import carb
 import numpy as np
 from isaacsim.core.api import World
-from isaacsim.core.prims import Articulation, RigidPrim, XFormPrim
+from isaacsim.core.prims import SingleArticulation, SingleRigidPrim, SingleXFormPrim
 from isaacsim.core.utils.stage import add_reference_to_stage, get_stage_units
 from isaacsim.core.utils.types import ArticulationAction
 from isaacsim.core.utils.viewports import set_camera_view
 from isaacsim.storage.native import get_assets_root_path
 
-device = torch.device("cuda:0")
-encoder = EncoderNet(6+6+3+4, [256, 256, 256]).to(device)
-actor = StochasticDDPGActor(encoder.dim, [256, 256], 6).to(device)
+from contorller.policy_controller import PolicyController
+from contorller.load_config import get_articulation_props, get_physics_properties, get_robot_joint_properties, parse_env_config
 
-encoder_params, actor_params, _ = torch.load("model.pth")
-encoder.load_state_dict(encoder_params)
-actor.load_state_dict(actor_params)
+first_step = True
+reset_needed = False
 
-encoder.eval()
-actor.eval()
-
-@torch.no_grad()
-def get_action(obs):
-    obs = torch.from_numpy(obs).float().to(device)
-
-    feature = encoder(obs)
-    step:DeterministicContinuousPolicyStep = actor(feature, std=1.0)
-    action = step.mean.cpu().numpy()
-
-    return action
+def on_physics_step(step_size) -> None:
+    global first_step
+    global reset_needed
+    if first_step:
+        contorller.initialize()
+        contorller.post_reset()
+        first_step = False
+    elif reset_needed:
+        print("reset")
+        my_world.reset(True)
+        reset_needed = False
+        first_step = True
+    else:
+        contorller.forward(step_size)
 
 # preparing the scene
 assets_root_path = get_assets_root_path()
@@ -51,55 +47,58 @@ set_camera_view(
     eye=[0.0, 2.5, 1.5], target=[0.00, 0.00, 0.00], camera_prim_path="/OmniverseKit_Persp"
 )  # set camera view
 
-# Add Franka
-asset_path = "env/assets/so101/so101.usd"
-add_reference_to_stage(usd_path=asset_path, prim_path="/World/Arm")  # add robot to stage
-robot = Articulation(prim_paths_expr="/World/Arm", name="my_arm")  # create an articulation object
+camera_asset_path = assets_root_path + "/Isaac/Sensors/Intel/RealSense/rsd455.usd"
+camera_xform_prim_path = "/World/Camera"
+camera_xform_name = "RSD455_xform"
+camera_rigid_prim_path = "/World/Camera/RSD455"
+camera_rigid_name = "RSD455_rigid"
 
-robot.set_solver_position_iteration_counts(np.full((1,), 64))
-robot.set_solver_velocity_iteration_counts(np.full((1,), 4))
+add_reference_to_stage(camera_asset_path, camera_xform_prim_path)
 
-robot.set_enabled_self_collisions(np.full((1,), True))
-robot.set_gains(
-    kps=np.array([17.8, 17.8, 17.8, 17.8, 17.8, 17.8]),
-    kds=np.array([0.6, 0.6, 0.6, 0.6, 0.6, 0.6]),
+camera_xform = SingleXFormPrim(prim_path=camera_xform_prim_path, name=camera_xform_name)
+camera = SingleRigidPrim(
+    prim_path=camera_rigid_prim_path, name=camera_rigid_name,
+    position=np.array([0.65, -0.65, 0.10]), orientation=np.array([0.9238795, 0.0, 0.0, -0.3826834])
 )
 
-asset_path = assets_root_path + "/Isaac/Props/Blocks/green_block.usd"
-add_reference_to_stage(usd_path=asset_path, prim_path="/World/GreenCube")  # add robot to stage
-xform = XFormPrim("/World/GreenCube")
-xform.set_local_scales(np.array([[0.76, 0.76, 0.76]]))
-cube = RigidPrim(prim_paths_expr="/World/GreenCube/Cube", name="my_cube")
+camera.disable_rigid_body_physics()
 
-# set the initial poses of the arm and the car so they don't collide BEFORE the simulation starts
-robot.set_world_poses(positions=np.array([[0.0, 0.0, 0.0]]) / get_stage_units())
-cube.set_world_poses(positions=np.array([[0.3, 0.12, 0.019]]) / get_stage_units())
+cube_xform_prim_path = "/World/GreenCube"
+cube_rigidbody_prim_path = "/World/GreenCube/Cube"
+cube_usd_path = "env/assets/so101/Cube.usd"
 
-# initialize the world
+cube_xform_name = "cube_xform"
+cube_rigidbody_name = "cube_rigidbody"
+cube_position = np.array([0.27, 0.0, 0.0177])
+cube_orientation = np.array([1.0, 0.0, 0.0, 0.0])
+
+add_reference_to_stage(cube_usd_path, cube_xform_prim_path)
+
+cube_xform = SingleXFormPrim(prim_path=cube_xform_prim_path, name=cube_xform_name)
+
+cube = SingleRigidPrim(
+    prim_path=cube_rigidbody_prim_path, name=cube_rigidbody_name, position=cube_position, orientation=cube_orientation
+)
+
+asset_path = "env/assets/so101/so101.usd"
+add_reference_to_stage(usd_path=asset_path, prim_path="/World/Robot")  # add robot to stage
+robot = SingleArticulation(prim_path="/World/Robot", name="robot",
+                           position=np.array([0.0, 0.0, 0.0]))
+
+contorller = PolicyController(
+    robot, cube
+)
+
 my_world.reset()
+my_world.add_physics_callback("physics_step", callback_fn=on_physics_step)
 
-current_pos = robot.get_joint_positions().copy()
-pre_pos = current_pos.copy()
-pre_action = np.array([[0, 0, 0, 0, 0, 0]])
-cube_state = cube.get_current_dynamic_state()
+steps = 0
 
-for i in range(1000):
-    obs = np.concatenate([cube_state.positions, cube_state.orientations, current_pos, pre_pos], axis=-1)
-    action = get_action(obs)
-    target_pos = current_pos + action * 0.2
-    robot.set_joint_position_targets(target_pos)
+while simulation_app.is_running(): 
+    my_world.step(render=True)
 
-    print(action)
-    #print(target_pos)
-    print("-----------------")
-
-    for _ in range(4):
-        my_world.step(render=True)
-
-    pre_pos = current_pos.copy()
-    current_pos = robot.get_joint_positions().copy()
-    cube_state = cube.get_current_dynamic_state()
-    
-    #pre_action = action.copy()
+    steps += 1
+    if steps % 500 == 0:
+        reset_needed = True
 
 simulation_app.close()

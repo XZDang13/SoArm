@@ -11,6 +11,9 @@ from isaaclab.sensors import FrameTransformerCfg, OffsetCfg
 from isaaclab.sensors import ContactSensorCfg
 from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg
 from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
+from isaaclab.managers import SceneEntityCfg
+from isaaclab.managers import EventTermCfg
+from isaaclab.envs.mdp import randomize_rigid_body_material, reset_joints_by_offset
 
 from .so_arm_env_base_cfg import SO_ARM_101_BASE_ENV
 
@@ -20,34 +23,30 @@ FRAME_MARKER_SMALL_CFG.markers["frame"].scale = (0.02, 0.02, 0.02)
 project_root = os.path.dirname(os.path.abspath(__file__))
 
 @configclass
+class EventCfg:
+    """Configuration for events."""
+
+    reset_robot_joints = EventTermCfg(
+        func=reset_joints_by_offset,
+        mode="reset",
+        params={
+            "position_range": (-1.0, 1.0),
+            "velocity_range": (0.0, 0.0),
+        },
+    )
+
+
+@configclass
 class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
     episode_length_s = 2.0
     
-    observation_space = 6+6+3+4
+    observation_space = 6+6+3+4+3+4
 
     green_cube:RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/GreenCube",
         init_state=RigidObjectCfg.InitialStateCfg(pos=[0.0, 0, 0.019], rot=[1, 0, 0, 0]),
         spawn=UsdFileCfg(
-            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/green_block.usd",
-            scale=(0.76, 0.76, 0.76),
-            rigid_props=RigidBodyPropertiesCfg(
-                solver_position_iteration_count=64,
-                solver_velocity_iteration_count=1,
-                max_angular_velocity=1000.0,
-                max_linear_velocity=1000.0,
-                max_depenetration_velocity=5.0,
-                disable_gravity=False,
-            ),
-        ),
-    )
-
-    red_cube:RigidObjectCfg = RigidObjectCfg(
-        prim_path="/World/envs/env_.*/RedCube",
-        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.0, 0, 0.019], rot=[1, 0, 0, 0]),
-        spawn=UsdFileCfg(
-            usd_path=f"{ISAAC_NUCLEUS_DIR}/Props/Blocks/red_block.usd",
-            scale=(0.76, 0.76, 0.76),
+            usd_path=f"{project_root}/assets/so101/Cube.usd",
             rigid_props=RigidBodyPropertiesCfg(
                 solver_position_iteration_count=64,
                 solver_velocity_iteration_count=1,
@@ -85,3 +84,5 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
         # Only care about contacts with the cube
         filter_prim_paths_expr=["/World/envs/env_.*/GreenCube/Cube"]
     )
+
+    #events: EventCfg = EventCfg()

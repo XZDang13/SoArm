@@ -83,20 +83,42 @@ class StackTask(DirectRLEnv):
 
         cube_quat_b = map_to_yaw_rep(cube_quat_b, xyzw=False)
 
+        pre_cube_pos_w = self.cube_pre_state[:, :3]
+        pre_cube_quat_b = self.cube_pre_state[:, 3:7]
+
+        pre_cube_pos_b, pre_cube_quat_b = subtract_frame_transforms(
+            self.robot.data.root_state_w[:, :3], 
+            self.robot.data.root_state_w[:, 3:7], 
+            pre_cube_pos_w, 
+            pre_cube_quat_b
+        )
+
+        pre_cube_quat_b = map_to_yaw_rep(pre_cube_quat_b, xyzw=False)
+
         joint_pos = self.robot.data.joint_pos.clone()
         previous_joint_pos = self._previous_joint_pos.clone()
 
-        #if self.cfg.is_training:
-        #    cube_pos_b += torch.randn_like(cube_pos_b) * 0.01
-        #    cube_quat_b += torch.randn_like(cube_quat_b) * 0.01
-        #    joint_pos += torch.randn_like(joint_pos) * 0.01
-        #    previous_joint_pos += torch.randn_like(previous_joint_pos) * 0.01
-        #    previous_actions += torch.randn_like(previous_actions) * 0.01             
+        if self.cfg.is_training:
+            cube_pos_noise = torch.empty_like(cube_pos_b).uniform_(-0.01, 0.01)
+            cube_quat_noise = torch.empty_like(cube_quat_b).uniform_(-0.1, 0.1)
+            pre_cube_pos_noise = torch.empty_like(pre_cube_pos_b).uniform_(-0.01, 0.01)
+            pre_cube_quat_noise = torch.empty_like(pre_cube_quat_b).uniform_(-0.1, 0.1)
+            joint_pos_noise = torch.empty_like(joint_pos).uniform_(-0.02, 0.02)
+            previous_joint_pos_noise = torch.empty_like(previous_joint_pos).uniform_(-0.02, 0.02)
+
+            cube_pos_b += cube_pos_noise
+            cube_quat_b += cube_quat_noise
+            pre_cube_pos_b += pre_cube_pos_noise
+            pre_cube_quat_b += pre_cube_quat_noise
+            joint_pos += joint_pos_noise
+            previous_joint_pos += previous_joint_pos_noise          
 
         obs = torch.cat([
             cube_pos_b,#3
             cube_quat_b,#4
             joint_pos, #6
+            pre_cube_pos_b,
+            pre_cube_quat_b,
             previous_joint_pos
         ], dim=-1)
 
@@ -134,6 +156,8 @@ class StackTask(DirectRLEnv):
         #print(gripper_contact_force)
         #print(torch.linalg.norm(gripper_contact_force, dim=-1))
         #print("----------------")
+
+
 
         motion_reward = StackTaskReward.compute_reward(
             self.end_effector_pre_state[:, :3],
@@ -228,10 +252,7 @@ class StackTask(DirectRLEnv):
         joint_pos = self.robot.data.default_joint_pos[env_ids]
         joint_vel = self.robot.data.default_joint_vel[env_ids]
 
-        default_root_state = self.robot.data.default_root_state[env_ids]
-        default_root_state[:, :3] += self.terrain.env_origins[env_ids]
-        self.robot.write_root_pose_to_sim(default_root_state[:, :7], env_ids)
-        self.robot.write_root_velocity_to_sim(default_root_state[:, 7:], env_ids)
+        #joint_pos[:, 0:3] += torch.empty_like(joint_pos[:, 0:3]).uniform_(-1.0, 1.0)
 
         self.robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 

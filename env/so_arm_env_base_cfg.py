@@ -21,6 +21,7 @@ class SO_ARM_101_BASE_ENV(DirectRLEnvCfg):
     action_scale = 0.2
 
     is_training = True
+    debug = True
 
     sim: SimulationCfg = SimulationCfg(
         dt=1 / 120,

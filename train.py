@@ -69,7 +69,7 @@ class Trainer:
 
         self.steps = 25
 
-        self.buffer_steps = 10000
+        self.buffer_steps = 50000
         self.rollout_buffer = ReplayBuffer(self.env_nums, self.buffer_steps)
 
         self.rollout_buffer.create_storage_space("observations", (self.obs_dim,), torch.float32)
@@ -82,12 +82,12 @@ class Trainer:
         
         self.obs = None
 
-        self.epochs = 250
+        self.epochs = 500
         self.update_iteration = 50
         self.batch_size = self.env_nums * 10
-        self.gamma = 0.995
+        self.gamma = 0.95
         self.tau = 0.005
-        self.regularization_weight = 5e-3
+        self.regularization_weight = 1e-2
 
         self.std = 1
 
