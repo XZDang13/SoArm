@@ -44,7 +44,7 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
 
     green_cube:RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/GreenCube",
-        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.0, 0, 0.019], rot=[1, 0, 0, 0]),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.0, 0, 0.819], rot=[1, 0, 0, 0]),
         spawn=UsdFileCfg(
             usd_path=f"{project_root}/assets/so101/Cube.usd",
             rigid_props=RigidBodyPropertiesCfg(

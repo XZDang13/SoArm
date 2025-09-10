@@ -11,6 +11,7 @@ from isaacsim.core.utils.prims import define_prim, get_prim_at_path
 from omni.physx import get_physx_simulation_interface
 from isaacsim.core.utils.rotations import euler_angles_to_quat
 from isaacsim.core.utils.types import ArticulationAction
+from PIL import Image
 
 from model.actor_critic import EncoderNet, StochasticDDPGActor
 from env.utils import map_to_yaw_rep
@@ -65,7 +66,8 @@ class PolicyController(BaseController):
     def __init__(
         self,
         robot,
-        cube
+        cube,
+        camera
     ) -> None:
         
         self.robot = robot
@@ -74,6 +76,7 @@ class PolicyController(BaseController):
         self.load_config()
 
         self.cube = cube
+        self.camera = camera
         self._action_scale = 0.25
         self._policy_counter = 0
 
@@ -90,7 +93,7 @@ class PolicyController(BaseController):
         self.actor.eval()
 
     def load_config(self):
-        self.policy_env_params = parse_env_config("/home/xdang/Desktop/SoArm/env.yaml")
+        self.policy_env_params = parse_env_config("env.yaml")
         self._decimation, self._dt, self.render_interval = get_physics_properties(self.policy_env_params)
 
     def initialize(
@@ -113,6 +116,7 @@ class PolicyController(BaseController):
             set_limits (bool, optional): Whether to set the limits. Defaults to True.
             set_articulation_props (bool, optional): Whether to set the articulation properties. Defaults to True.
         """
+        self.camera.initialize()
         self.robot.initialize(physics_sim_view=physics_sim_view)
         self.robot.get_articulation_controller().set_effort_modes(effort_modes)
 
@@ -176,49 +180,67 @@ class PolicyController(BaseController):
             step = self.actor(feature, std=1.0)
             action = step.mean.cpu().detach().view(-1).numpy()
         return action
-
-    def _compute_observation(self) -> NotImplementedError:
-        """
-        Computes the observation. Not implemented.
-        """
-        state = self.cube.get_current_dynamic_state()
-        cube_pos = state.position
-        cube_quat = state.orientation
+    
+    def get_state_obs(self):
+        cube_pos, cube_quat = self.get_cube_state()
         joint_pos = self.robot.get_joint_positions()
+
+        cube_pos[-1] -= 0.8
+
+        pre_cube_pos = self.pre_cube_pos.copy()
+        pre_cube_quat = self.pre_cube_quat.copy()
+        pre_joint_pos = self.pre_joint_pos.copy()
+
+        pre_cube_pos [-1] -= 0.8
+
+        self.pre_cube_pos = cube_pos.copy()
+        self.pre_cube_quat = cube_quat.copy()
+        self.pre_joint_pos = joint_pos.copy()
 
         cube_pos = torch.from_numpy(cube_pos)
         cube_quat = torch.from_numpy(cube_quat)
-
         cube_quat = map_to_yaw_rep(cube_quat)
-
-        pre_cube_pos = self.pre_cube_state.position
-        pre_cube_quat = self.pre_cube_state.orientation
+        joint_pos = torch.from_numpy(joint_pos)
 
         pre_cube_pos = torch.from_numpy(pre_cube_pos)
         pre_cube_quat = torch.from_numpy(pre_cube_quat)
-
         pre_cube_quat = map_to_yaw_rep(pre_cube_quat)
+        pre_joint_pos = torch.from_numpy(pre_joint_pos)
 
-        joint_pos = torch.from_numpy(joint_pos)
-        pre_joint_pos = torch.from_numpy(self.pre_joint_pos)
+        return [cube_pos, cube_quat, joint_pos, pre_cube_pos, pre_cube_quat, pre_joint_pos]
 
-        obs = torch.cat([cube_pos, cube_quat, joint_pos, pre_cube_pos, pre_cube_quat, pre_joint_pos])
+    def get_camera_obs(self):
+        frame = self.get_frame()
+        pre_frame = self.pre_frame.copy()
 
-        self.pre_joint_pos = self.robot.get_joint_positions().copy()
-        self.pre_cube_state = self.cube.get_current_dynamic_state()
+        frame = Image.fromarray(frame)
+        pre_frame = Image.fromarray(pre_frame)
 
-        return obs
+        return [frame, pre_frame]
 
-    def forward(self, dt) -> NotImplementedError:
-        if self._policy_counter % self._decimation == 0:
-            obs = self._compute_observation()
-            self.action = self._compute_action(obs)
-            self.target_joint_pos = self.action * self._action_scale + self.robot.get_joint_positions()
+    def forward(self):
+        state_obs = self.get_state_obs()
+        frame_obs = self.get_camera_obs()
+        state_obs = torch.cat(state_obs)
+        self.action = self._compute_action(state_obs)
+        self.target_joint_pos = self.action * self._action_scale + self.robot.get_joint_positions()
         
         action = ArticulationAction(joint_positions=self.target_joint_pos)
         self.robot.apply_action(action)
-
         self._policy_counter += 1
+
+    def get_frame(self):
+        frame = self.camera.get_current_frame()
+        img = frame["rgb"]
+
+        return img
+        
+    def get_cube_state(self):
+        cube_state = self.cube.get_current_dynamic_state()
+        cube_pos = cube_state.position
+        cube_quat = cube_state.orientation
+
+        return cube_pos, cube_quat
 
     def post_reset(self) -> None:
         """
@@ -226,7 +248,7 @@ class PolicyController(BaseController):
         """
         self.robot.post_reset()
 
-        cube_pos = np.array([0.0, 0, 0.019])
+        cube_pos = np.array([0.0, 0, 0.819])
         offset_x, offset_y = sample_in_annular_sector(0.225, 0.325, -torch.pi/3, torch.pi/3)
         cube_pos[0] += offset_x
         cube_pos[1] += offset_y
@@ -236,6 +258,10 @@ class PolicyController(BaseController):
 
         self.cube.set_world_pose(cube_pos, cube_quat)
 
+        self.target_joint_pos = self.robot.get_joint_positions().copy()
         self.pre_joint_pos = self.robot.get_joint_positions().copy()
-        self.pre_cube_state = self.cube.get_current_dynamic_state()
+        cube_pos, cube_quat = self.get_cube_state()
+        self.pre_cube_pos = cube_pos.copy()
+        self.pre_cube_quat = cube_quat.copy()
+        self.pre_frame = self.get_frame().copy()
 

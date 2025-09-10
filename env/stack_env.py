@@ -35,6 +35,7 @@ class StackTask(DirectRLEnv):
         self.goal_quat = torch.as_tensor([1.0, 0.0, 0.0, 0.0], device=self.device)
 
     def _setup_scene(self):
+        self.table = RigidObject(self.cfg.table)
         self.robot = Articulation(self.cfg.robot)
         self.green_cube = RigidObject(self.cfg.green_cube)
         #self.red_cube = RigidObject(self.cfg.red_cube)
@@ -42,6 +43,7 @@ class StackTask(DirectRLEnv):
         self.gripper_contact = ContactSensor(self.cfg.gripper_contact)
         self.jaw_contact = ContactSensor(self.cfg.jaw_contact)
 
+        self.scene.articulations["table"] = self.table
         self.scene.articulations["robot"] = self.robot
         self.scene.rigid_objects["green_cube"] = self.green_cube
         #self.scene.rigid_objects["red_cube"] = self.red_cube

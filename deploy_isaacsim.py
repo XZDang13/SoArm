@@ -9,30 +9,19 @@ import numpy as np
 from isaacsim.core.api import World
 from isaacsim.core.prims import SingleArticulation, SingleRigidPrim, SingleXFormPrim
 from isaacsim.core.utils.stage import add_reference_to_stage, get_stage_units
+from isaacsim.core.utils.prims import get_prim_at_path
 from isaacsim.core.utils.types import ArticulationAction
 from isaacsim.core.utils.viewports import set_camera_view
 from isaacsim.storage.native import get_assets_root_path
+from omni.isaac.sensor import Camera
+
+from PIL import Image
 
 from contorller.policy_controller import PolicyController
 from contorller.load_config import get_articulation_props, get_physics_properties, get_robot_joint_properties, parse_env_config
 
 first_step = True
 reset_needed = False
-
-def on_physics_step(step_size) -> None:
-    global first_step
-    global reset_needed
-    if first_step:
-        contorller.initialize()
-        contorller.post_reset()
-        first_step = False
-    elif reset_needed:
-        print("reset")
-        my_world.reset(True)
-        reset_needed = False
-        first_step = True
-    else:
-        contorller.forward(step_size)
 
 # preparing the scene
 assets_root_path = get_assets_root_path()
@@ -47,6 +36,23 @@ set_camera_view(
     eye=[0.0, 2.5, 1.5], target=[0.00, 0.00, 0.00], camera_prim_path="/OmniverseKit_Persp"
 )  # set camera view
 
+table_xform_prim_path = "/World/TableXform"
+table_rigidbody_prim_path = "/World/TableXform/Table"
+table_usd_path = "env/assets/so101/Table.usd"
+
+table_xform_name = "table_xform"
+table_rigidbody_name = "table_rigidbody"
+table_position = np.array([0.275, 0.0, 0.4])
+table_orientation = np.array([1.0, 0.0, 0.0, 0.0])
+
+add_reference_to_stage(table_usd_path, table_xform_prim_path)
+
+table_xform = SingleXFormPrim(prim_path=table_xform_prim_path, name=table_xform_name)
+
+table = SingleRigidPrim(
+    prim_path=table_rigidbody_prim_path, name=table_rigidbody_name, position=table_position, orientation=table_orientation
+)
+
 camera_asset_path = assets_root_path + "/Isaac/Sensors/Intel/RealSense/rsd455.usd"
 camera_xform_prim_path = "/World/Camera"
 camera_xform_name = "RSD455_xform"
@@ -56,12 +62,19 @@ camera_rigid_name = "RSD455_rigid"
 add_reference_to_stage(camera_asset_path, camera_xform_prim_path)
 
 camera_xform = SingleXFormPrim(prim_path=camera_xform_prim_path, name=camera_xform_name)
-camera = SingleRigidPrim(
+camera_rigidbody = SingleRigidPrim(
     prim_path=camera_rigid_prim_path, name=camera_rigid_name,
-    position=np.array([0.65, -0.65, 0.10]), orientation=np.array([0.9238795, 0.0, 0.0, -0.3826834])
+    position=np.array([0.65, -0.65, 0.875]), orientation=np.array([0.9238795, 0.0, 0.0, -0.3826834])
 )
 
-camera.disable_rigid_body_physics()
+camera_rigidbody.disable_rigid_body_physics()
+
+color_camera = Camera(
+    prim_path="/World/Camera/RSD455/Camera_OmniVision_OV9782_Color",
+    resolution=(640, 480),
+    frequency=30,
+)
+
 
 cube_xform_prim_path = "/World/GreenCube"
 cube_rigidbody_prim_path = "/World/GreenCube/Cube"
@@ -69,7 +82,7 @@ cube_usd_path = "env/assets/so101/Cube.usd"
 
 cube_xform_name = "cube_xform"
 cube_rigidbody_name = "cube_rigidbody"
-cube_position = np.array([0.27, 0.0, 0.0177])
+cube_position = np.array([0.27, 0.0, 0.8177])
 cube_orientation = np.array([1.0, 0.0, 0.0, 0.0])
 
 add_reference_to_stage(cube_usd_path, cube_xform_prim_path)
@@ -83,22 +96,27 @@ cube = SingleRigidPrim(
 asset_path = "env/assets/so101/so101.usd"
 add_reference_to_stage(usd_path=asset_path, prim_path="/World/Robot")  # add robot to stage
 robot = SingleArticulation(prim_path="/World/Robot", name="robot",
-                           position=np.array([0.0, 0.0, 0.0]))
+                           position=np.array([0.0, 0.0, 0.8]))
+
+robot.set_default_state(position=np.array([0.0, 0.0, 0.8]))
 
 contorller = PolicyController(
-    robot, cube
+    robot, cube, color_camera
 )
 
 my_world.reset()
-my_world.add_physics_callback("physics_step", callback_fn=on_physics_step)
+contorller.initialize()
+robot.post_reset()
 
-steps = 0
-
-while simulation_app.is_running(): 
+for _ in range(100):
     my_world.step(render=True)
 
-    steps += 1
-    if steps % 500 == 0:
-        reset_needed = True
+while simulation_app.is_running():
+    contorller.post_reset()
+    for _ in range(100):
+
+        contorller.forward()
+        for _ in range(4):
+            my_world.step(render=True)
 
 simulation_app.close()

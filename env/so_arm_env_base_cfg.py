@@ -1,3 +1,5 @@
+import os
+
 import isaaclab.sim as sim_utils
 from isaaclab.envs import DirectRLEnvCfg
 from isaaclab.scene import InteractiveSceneCfg
@@ -5,8 +7,13 @@ from isaaclab.terrains import TerrainImporterCfg
 from isaaclab.sim import SimulationCfg
 from isaaclab.utils import configclass
 from isaaclab.assets import ArticulationCfg
+from isaaclab.sim.spawners.from_files.from_files_cfg import UsdFileCfg
+from isaaclab.assets import RigidObjectCfg
+from isaaclab.sim.schemas.schemas_cfg import RigidBodyPropertiesCfg
 
 from .so_arm_101_cfg import SO_ARM_101_CFG
+
+project_root = os.path.dirname(os.path.abspath(__file__))
 
 @configclass
 class SO_ARM_101_BASE_ENV(DirectRLEnvCfg):
@@ -57,3 +64,19 @@ class SO_ARM_101_BASE_ENV(DirectRLEnvCfg):
     )
 
     robot:ArticulationCfg = SO_ARM_101_CFG.replace(prim_path="/World/envs/env_.*/Robot")
+
+    table:RigidObjectCfg = RigidObjectCfg(
+        prim_path="/World/envs/env_.*/Table",
+        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.275, 0.0, 0.4], rot=[1, 0, 0, 0]),
+        spawn=UsdFileCfg(
+            usd_path=f"{project_root}/assets/so101/Table.usd",
+            rigid_props=RigidBodyPropertiesCfg(
+                solver_position_iteration_count=64,
+                solver_velocity_iteration_count=1,
+                max_angular_velocity=1000.0,
+                max_linear_velocity=1000.0,
+                max_depenetration_velocity=5.0,
+                disable_gravity=False,
+            ),
+        ),
+    )

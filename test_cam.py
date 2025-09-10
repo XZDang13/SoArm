@@ -34,7 +34,7 @@ config = RealSenseCameraConfig(
     width=640,
     height=480,
     color_mode=ColorMode.RGB,
-    use_depth=True,
+    use_depth=False,
     rotation=Cv2Rotation.NO_ROTATION
 )
 
@@ -63,7 +63,7 @@ try:
         loop_start = time.perf_counter()
 
         color_frame = camera.read()        # RGB
-        depth_map = camera.read_depth()    # float meters or uint16
+        #depth_map = camera.read_depth()    # float meters or uint16
 
         if color_frame is None:
             # If grab failed, skip this iteration
@@ -87,11 +87,13 @@ try:
 
         frames += 1
 
+        color_bgr_resize = cv2.resize(color_bgr, (224, 224))
+
         # Put FPS on color image
         cv2.putText(color_bgr, f"FPS: {ema_fps:.1f}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv2.LINE_AA)
 
-        cv2.imshow(window_color, color_bgr)
+        cv2.imshow(window_color, color_bgr_resize)
         #cv2.imshow(window_depth, depth_vis)
 
         # Exit on 'q'
