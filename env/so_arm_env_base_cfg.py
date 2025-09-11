@@ -25,7 +25,7 @@ class SO_ARM_101_BASE_ENV(DirectRLEnvCfg):
     action_space = 6
     state_space = 0
 
-    action_scale = 0.25
+    action_scale = 0.15
 
     is_training = True
     debug = True
@@ -60,14 +60,14 @@ class SO_ARM_101_BASE_ENV(DirectRLEnvCfg):
     )
 
     scene:InteractiveSceneCfg = InteractiveSceneCfg(
-        num_envs=256, env_spacing=1.0, replicate_physics=True
+        num_envs=256, env_spacing=2.0, replicate_physics=True
     )
 
     robot:ArticulationCfg = SO_ARM_101_CFG.replace(prim_path="/World/envs/env_.*/Robot")
 
     table:RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/Table",
-        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.275, 0.0, 0.4], rot=[1, 0, 0, 0]),
+        init_state=RigidObjectCfg.InitialStateCfg(pos=[0.0, 0.0, 0.4], rot=[1, 0, 0, 0]),
         spawn=UsdFileCfg(
             usd_path=f"{project_root}/assets/so101/Table.usd",
             rigid_props=RigidBodyPropertiesCfg(

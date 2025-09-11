@@ -1,8 +1,10 @@
 from isaacsim import SimulationApp
 
-simulation_app = SimulationApp({"headless": False})  # start the simulation app, with GUI open
+simulation_app = SimulationApp({"headless": True})  # start the simulation app, with GUI open
 
 import sys
+
+from tqdm import trange
 
 import carb
 import numpy as np
@@ -15,9 +17,9 @@ from isaacsim.core.utils.viewports import set_camera_view
 from isaacsim.storage.native import get_assets_root_path
 from omni.isaac.sensor import Camera
 
-from PIL import Image
+from writer import Writer
 
-from contorller.policy_controller import PolicyController
+from contorller.state_policy_controller import PolicyController
 from contorller.load_config import get_articulation_props, get_physics_properties, get_robot_joint_properties, parse_env_config
 
 first_step = True
@@ -42,7 +44,7 @@ table_usd_path = "env/assets/so101/Table.usd"
 
 table_xform_name = "table_xform"
 table_rigidbody_name = "table_rigidbody"
-table_position = np.array([0.275, 0.0, 0.4])
+table_position = np.array([0.72, 0.0, 0.4])
 table_orientation = np.array([1.0, 0.0, 0.0, 0.0])
 
 add_reference_to_stage(table_usd_path, table_xform_prim_path)
@@ -64,7 +66,7 @@ add_reference_to_stage(camera_asset_path, camera_xform_prim_path)
 camera_xform = SingleXFormPrim(prim_path=camera_xform_prim_path, name=camera_xform_name)
 camera_rigidbody = SingleRigidPrim(
     prim_path=camera_rigid_prim_path, name=camera_rigid_name,
-    position=np.array([0.65, -0.65, 0.875]), orientation=np.array([0.9238795, 0.0, 0.0, -0.3826834])
+    position=np.array([0.5, -0.5, 0.875]), orientation=np.array([0.9238795, 0.0, 0.0, -0.3826834])
 )
 
 camera_rigidbody.disable_rigid_body_physics()
@@ -108,15 +110,23 @@ my_world.reset()
 contorller.initialize()
 robot.post_reset()
 
-for _ in range(100):
+for _ in range(120):
     my_world.step(render=True)
 
-while simulation_app.is_running():
+for i in trange(200):
     contorller.post_reset()
-    for _ in range(100):
 
-        contorller.forward()
+    for _ in range(12):
+        my_world.step(render=True)
+
+    for _ in range(50):
+        state_obs = contorller.get_state_obs()
+        frame_obs = contorller.get_camera_obs()
+        Writer.save_obs(state_obs, frame_obs)
+        contorller.forward(state_obs)
         for _ in range(4):
             my_world.step(render=True)
+
+    print(i)
 
 simulation_app.close()

@@ -11,7 +11,7 @@ from isaaclab.utils.math import (subtract_frame_transforms, quat_from_euler_xyz,
                                  euler_xyz_from_quat)
 
 from .stack_cfg import STACK_TASK_CFG
-from .utils import map_to_yaw_rep
+from .utils import map_to_yaw_rep, add_quat_noise_wxyz
 from reward.stack_task import StackTaskReward
 
 class StackTask(DirectRLEnv):
@@ -31,7 +31,7 @@ class StackTask(DirectRLEnv):
         self.end_effector_pre_state = torch.zeros(self.num_envs, 7, device=self.device)
         self.cube_pre_state = torch.zeros(self.num_envs, 7, device=self.device)
 
-        self.goal_pos = torch.as_tensor([0.23, 0.0, 0.08], device=self.device)
+        self.goal_pos = torch.as_tensor([0.23, 0.0, 0.88], device=self.device)
         self.goal_quat = torch.as_tensor([1.0, 0.0, 0.0, 0.0], device=self.device)
 
     def _setup_scene(self):
@@ -102,18 +102,18 @@ class StackTask(DirectRLEnv):
 
         if self.cfg.is_training:
             cube_pos_noise = torch.empty_like(cube_pos_b).uniform_(-0.01, 0.01)
-            cube_quat_noise = torch.empty_like(cube_quat_b).uniform_(-0.1, 0.1)
             pre_cube_pos_noise = torch.empty_like(pre_cube_pos_b).uniform_(-0.01, 0.01)
-            pre_cube_quat_noise = torch.empty_like(pre_cube_quat_b).uniform_(-0.1, 0.1)
             joint_pos_noise = torch.empty_like(joint_pos).uniform_(-0.02, 0.02)
             previous_joint_pos_noise = torch.empty_like(previous_joint_pos).uniform_(-0.02, 0.02)
 
             cube_pos_b += cube_pos_noise
-            cube_quat_b += cube_quat_noise
+            #cube_quat_b += cube_quat_noise
             pre_cube_pos_b += pre_cube_pos_noise
-            pre_cube_quat_b += pre_cube_quat_noise
+            #pre_cube_quat_b += pre_cube_quat_noise
             joint_pos += joint_pos_noise
-            previous_joint_pos += previous_joint_pos_noise          
+            previous_joint_pos += previous_joint_pos_noise       
+            cube_quat_b = add_quat_noise_wxyz(cube_quat_b, max_angle=0.02)
+            pre_cube_quat_b = add_quat_noise_wxyz(pre_cube_quat_b, max_angle=0.02) 
 
         obs = torch.cat([
             cube_pos_b,#3
@@ -178,7 +178,7 @@ class StackTask(DirectRLEnv):
         
         penlty = self._joint_velocity_penalty() + self._get_action_rate_reward() + self._difference_to_default_reward()
         
-        reward = motion_reward * 2.5 + penlty * (-0.01)
+        reward = motion_reward * 2.5 + penlty * (-0.025)
         #print(motion_reward)
         #print("-----------------")
 
@@ -194,9 +194,10 @@ class StackTask(DirectRLEnv):
         return torch.sum((self.robot.data.joint_pos - self.robot.data.default_joint_pos) ** 2, dim=1)
     
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
+        terminated = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)
         time_out = self.episode_length_buf >= self.max_episode_length - 1
         
-        return False, time_out
+        return terminated, time_out
     
     def sample_in_annular_sector(self, n,
                                    r_min: float, r_max: float,
@@ -254,7 +255,7 @@ class StackTask(DirectRLEnv):
         joint_pos = self.robot.data.default_joint_pos[env_ids]
         joint_vel = self.robot.data.default_joint_vel[env_ids]
 
-        #joint_pos[:, 0:3] += torch.empty_like(joint_pos[:, 0:3]).uniform_(-1.0, 1.0)
+        joint_pos[:, 0:3] += torch.empty_like(joint_pos[:, 0:3]).uniform_(-0.5, 0.5)
 
         self.robot.write_joint_state_to_sim(joint_pos, joint_vel, None, env_ids)
 

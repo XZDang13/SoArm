@@ -19,15 +19,7 @@ from env.utils import map_to_yaw_rep
 from .load_config import get_articulation_props, get_physics_properties, get_robot_joint_properties, parse_env_config
 
 
-def sample_in_annular_sector(
-        r_min: float, r_max: float,
-        theta_min: float, theta_max: float,
-        center=(0.0, 0.0),
-        degrees=False,
-        dtype=torch.float32
-    ):
-
-    # angles
+def sample_in_annular_sector(r_min, r_max, theta_min, theta_max, center=(0.0,0.0), degrees=False, dtype=torch.float32):
     if degrees:
         tmin = torch.deg2rad(torch.tensor(theta_min, dtype=dtype))
         tmax = torch.deg2rad(torch.tensor(theta_max, dtype=dtype))
@@ -35,17 +27,16 @@ def sample_in_annular_sector(
         tmin = torch.tensor(theta_min, dtype=dtype)
         tmax = torch.tensor(theta_max, dtype=dtype)
 
-    theta = torch.empty(1, dtype=dtype).uniform_(float(tmin), float(tmax))
+    theta = torch.empty(1, dtype=dtype).uniform_(float(tmin), float(tmax))[0]
 
-    # radii: sqrt trick for area-uniformity
-    u = torch.empty(1, dtype=dtype).uniform_(0.0, 1.0)
+    # area-uniform radius
+    u = torch.rand(1, dtype=dtype)[0]
     r = torch.sqrt(u * (r_max**2 - r_min**2) + r_min**2)
 
-    cx = torch.as_tensor(center[0], dtype=dtype)
-    cy = torch.as_tensor(center[1], dtype=dtype)
-    x = cx + r * torch.cos(theta)
-    y = cy + r * torch.sin(theta)
-    return x.numpy(), y.numpy()
+    cx, cy = map(lambda v: torch.as_tensor(v, dtype=dtype), center)
+    x = (cx + r * torch.cos(theta)).item()
+    y = (cy + r * torch.sin(theta)).item()
+    return x, y
 
 class PolicyController(BaseController):
     """
@@ -71,26 +62,14 @@ class PolicyController(BaseController):
     ) -> None:
         
         self.robot = robot
-        
-        self.load_policy()
-        self.load_config()
 
         self.cube = cube
         self.camera = camera
-        self._action_scale = 0.25
+        self._action_scale = 0.15
         self._policy_counter = 0
 
     def load_policy(self):
-        self.device = torch.device("cuda:0")
-        self.encoder = EncoderNet(6+6+3+4+3+4, [256, 256, 256]).to(self.device)
-        self.actor = StochasticDDPGActor(self.encoder.dim, [256, 256], 6).to(self.device)
-
-        encoder_params, actor_params, _ = torch.load("model.pth")
-        self.encoder.load_state_dict(encoder_params)
-        self.actor.load_state_dict(actor_params)
-
-        self.encoder.eval()
-        self.actor.eval()
+        pass
 
     def load_config(self):
         self.policy_env_params = parse_env_config("env.yaml")
@@ -165,63 +144,46 @@ class PolicyController(BaseController):
             self.robot.set_sleep_threshold(sleep_threshold)
 
     def _compute_action(self, obs: np.ndarray) -> np.ndarray:
-        """
-        Computes the action from the observation using the loaded policy.
-
-        Args:
-            obs (np.ndarray): The observation.
-
-        Returns:
-            np.ndarray: The action.
-        """
-        with torch.no_grad():
-            obs = obs.view(1, -1).float().to(self.device)
-            feature = self.encoder(obs)
-            step = self.actor(feature, std=1.0)
-            action = step.mean.cpu().detach().view(-1).numpy()
-        return action
+        pass
     
     def get_state_obs(self):
         cube_pos, cube_quat = self.get_cube_state()
         joint_pos = self.robot.get_joint_positions()
 
-        cube_pos[-1] -= 0.8
-
         pre_cube_pos = self.pre_cube_pos.copy()
         pre_cube_quat = self.pre_cube_quat.copy()
         pre_joint_pos = self.pre_joint_pos.copy()
-
-        pre_cube_pos [-1] -= 0.8
 
         self.pre_cube_pos = cube_pos.copy()
         self.pre_cube_quat = cube_quat.copy()
         self.pre_joint_pos = joint_pos.copy()
 
         cube_pos = torch.from_numpy(cube_pos)
+        cube_pos[-1] -= 0.8
         cube_quat = torch.from_numpy(cube_quat)
-        cube_quat = map_to_yaw_rep(cube_quat)
+        cube_quat = map_to_yaw_rep(cube_quat, xyzw=False)
         joint_pos = torch.from_numpy(joint_pos)
 
         pre_cube_pos = torch.from_numpy(pre_cube_pos)
+        pre_cube_pos[-1] -= 0.8
         pre_cube_quat = torch.from_numpy(pre_cube_quat)
-        pre_cube_quat = map_to_yaw_rep(pre_cube_quat)
+        pre_cube_quat = map_to_yaw_rep(pre_cube_quat, xyzw=False)
         pre_joint_pos = torch.from_numpy(pre_joint_pos)
 
-        return [cube_pos, cube_quat, joint_pos, pre_cube_pos, pre_cube_quat, pre_joint_pos]
+        return torch.cat([cube_pos, cube_quat, joint_pos, pre_cube_pos, pre_cube_quat, pre_joint_pos])
 
     def get_camera_obs(self):
         frame = self.get_frame()
         pre_frame = self.pre_frame.copy()
 
-        frame = Image.fromarray(frame)
-        pre_frame = Image.fromarray(pre_frame)
+        self.pre_frame = frame.copy()
+
+        frame = Image.fromarray(frame).convert('RGB')
+        pre_frame = Image.fromarray(pre_frame).convert('RGB')
 
         return [frame, pre_frame]
 
-    def forward(self):
-        state_obs = self.get_state_obs()
-        frame_obs = self.get_camera_obs()
-        state_obs = torch.cat(state_obs)
+    def forward(self, state_obs):
         self.action = self._compute_action(state_obs)
         self.target_joint_pos = self.action * self._action_scale + self.robot.get_joint_positions()
         
@@ -249,7 +211,7 @@ class PolicyController(BaseController):
         self.robot.post_reset()
 
         cube_pos = np.array([0.0, 0, 0.819])
-        offset_x, offset_y = sample_in_annular_sector(0.225, 0.325, -torch.pi/3, torch.pi/3)
+        offset_x, offset_y = sample_in_annular_sector(0.225, 0.325, -np.pi/3, np.pi/3)
         cube_pos[0] += offset_x
         cube_pos[1] += offset_y
 

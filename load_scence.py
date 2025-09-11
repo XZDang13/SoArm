@@ -17,7 +17,7 @@ from omni.isaac.sensor import Camera
 
 from PIL import Image
 
-from contorller.policy_controller import PolicyController
+from contorller.state_policy_controller import PolicyController
 from contorller.load_config import get_articulation_props, get_physics_properties, get_robot_joint_properties, parse_env_config
 
 # preparing the scene

@@ -1,4 +1,5 @@
 import torch
+import math
 
 def quat_to_rotmat(q: torch.Tensor, xyzw: bool = True) -> torch.Tensor:
     if xyzw:
@@ -43,3 +44,34 @@ def map_to_yaw_rep(q: torch.Tensor, xyzw: bool = True) -> torch.Tensor:
     R = quat_to_rotmat(q, xyzw=xyzw)
     yaw = yaw_from_rotmat_robust(R)
     return quat_from_yaw(yaw, xyzw=xyzw)
+
+def add_quat_noise_wxyz(quat: torch.Tensor, max_angle: float = 0.05) -> torch.Tensor:
+    assert quat.shape[-1] == 4, "quat must have shape (..., 4)"
+
+    # Random axis (uniform on sphere)
+    axis = torch.randn_like(quat[..., 1:4])
+    axis = axis / (torch.norm(axis, dim=-1, keepdim=True) + 1e-8)
+
+    # Random rotation angle from uniform[-max_angle, max_angle]
+    angle = (torch.rand(quat.shape[:-1], device=quat.device) * 2 - 1) * max_angle
+    half_angle = 0.5 * angle
+
+    # Axis-angle → quaternion [w, x, y, z]
+    delta_quat = torch.cat([
+        torch.cos(half_angle)[..., None],
+        axis * torch.sin(half_angle)[..., None]
+    ], dim=-1)
+
+    # Quaternion multiplication: q_noisy = delta * quat
+    w1, x1, y1, z1 = delta_quat.unbind(-1)
+    w2, x2, y2, z2 = quat.unbind(-1)
+    noisy = torch.stack([
+        w1*w2 - x1*x2 - y1*y2 - z1*z2,
+        w1*x2 + x1*w2 + y1*z2 - z1*y2,
+        w1*y2 - x1*z2 + y1*w2 + z1*x2,
+        w1*z2 + x1*y2 - y1*x2 + z1*w2,
+    ], dim=-1)
+
+    # Normalize
+    noisy = noisy / (torch.norm(noisy, dim=-1, keepdim=True) + 1e-8)
+    return noisy
