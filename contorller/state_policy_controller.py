@@ -29,7 +29,7 @@ class StatePolicyController(PolicyController):
         self.encoder.eval()
         self.actor.eval()
 
-    def _compute_action(self, obs: np.ndarray) -> np.ndarray:
+    def _compute_action(self, obs: np.ndarray, deterministic:bool=True) -> np.ndarray:
         """
         Computes the action from the observation using the loaded policy.
 
@@ -43,5 +43,9 @@ class StatePolicyController(PolicyController):
             obs = obs.view(1, -1).float().to(self.device)
             feature = self.encoder(obs)
             step = self.actor(feature, std=1.0)
-            action = step.mean.cpu().detach().view(-1).numpy()
+            if deterministic:
+                action = step.mean
+            else:    
+                action = step.pi.rsample()
+            action = action.cpu().detach().view(-1).numpy()
         return action

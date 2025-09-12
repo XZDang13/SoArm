@@ -183,8 +183,8 @@ class PolicyController(BaseController):
 
         return [frame, pre_frame]
 
-    def forward(self, state_obs):
-        self.action = self._compute_action(state_obs)
+    def forward(self, obs, deterministic):
+        self.action = self._compute_action(obs, deterministic)
         self.target_joint_pos = self.action * self._action_scale + self.robot.get_joint_positions()
         
         action = ArticulationAction(joint_positions=self.target_joint_pos)

@@ -1,11 +1,22 @@
 from isaacsim import SimulationApp
+import os
+
+base_folder = "replays"
+
+# Define subfolders
+subfolders = ["json", "img"]
+
+# Loop through and create them if needed
+for sub in subfolders:
+    path = os.path.join(base_folder, sub)
+    os.makedirs(path, exist_ok=True)
 
 simulation_app = SimulationApp({"headless": True})  # start the simulation app, with GUI open
 
 import sys
 
 from tqdm import trange
-
+import time
 import carb
 import numpy as np
 from isaacsim.core.api import World
@@ -16,14 +27,16 @@ from isaacsim.core.utils.types import ArticulationAction
 from isaacsim.core.utils.viewports import set_camera_view
 from isaacsim.storage.native import get_assets_root_path
 from omni.isaac.sensor import Camera
+from isaacsim.core.experimental.objects import DomeLight, DistantLight
 
 from writer import Writer
 
-from contorller.state_policy_controller import PolicyController
-from contorller.load_config import get_articulation_props, get_physics_properties, get_robot_joint_properties, parse_env_config
+from contorller.state_policy_controller import StatePolicyController
 
 first_step = True
 reset_needed = False
+
+
 
 # preparing the scene
 assets_root_path = get_assets_root_path()
@@ -37,6 +50,13 @@ my_world.scene.add_default_ground_plane()  # add ground plane
 set_camera_view(
     eye=[0.0, 2.5, 1.5], target=[0.00, 0.00, 0.00], camera_prim_path="/OmniverseKit_Persp"
 )  # set camera view
+
+distant = DistantLight(
+    paths="/World/DistantLight"
+)
+
+distant_light = distant.lights[0]
+distant_light.CreateIntensityAttr(6500.0)
 
 table_xform_prim_path = "/World/TableXform"
 table_rigidbody_prim_path = "/World/TableXform/Table"
@@ -102,7 +122,7 @@ robot = SingleArticulation(prim_path="/World/Robot", name="robot",
 
 robot.set_default_state(position=np.array([0.0, 0.0, 0.8]))
 
-contorller = PolicyController(
+contorller = StatePolicyController(
     robot, cube, color_camera
 )
 
@@ -113,20 +133,22 @@ robot.post_reset()
 for _ in range(120):
     my_world.step(render=True)
 
-for i in trange(200):
+start = time.perf_counter()
+for i in trange(1000):
     contorller.post_reset()
+    for _ in range(4):
+        my_world.step(render=False)
 
-    for _ in range(12):
-        my_world.step(render=True)
-
-    for _ in range(50):
+    for _ in range(25):
         state_obs = contorller.get_state_obs()
         frame_obs = contorller.get_camera_obs()
         Writer.save_obs(state_obs, frame_obs)
-        contorller.forward(state_obs)
+        contorller.forward(state_obs, False)
         for _ in range(4):
             my_world.step(render=True)
 
-    print(i)
+    if i % 100 == 0:
+        end = time.perf_counter()
+        print(f"{i} took {end - start:.4f} seconds")
 
 simulation_app.close()

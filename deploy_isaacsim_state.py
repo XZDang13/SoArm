@@ -32,7 +32,7 @@ if assets_root_path is None:
     sys.exit()
 
 my_world = World(physics_dt=1/120, rendering_dt=1/120, stage_units_in_meters=1.0)
-my_world.scene.add_ground_plane()  # add ground plane
+my_world.scene.add_default_ground_plane()  # add ground plane
 set_camera_view(
     eye=[0.0, 2.5, 1.5], target=[0.00, 0.00, 0.00], camera_prim_path="/OmniverseKit_Persp"
 )  # set camera view
@@ -47,9 +47,9 @@ distant = DistantLight(
     paths="/World/DistantLight"
 )
 
-dome.set_texture_files(texture_files=[assets_root_path + "/Isaac/Materials/Textures/Patterns/nv_brick_tile.jpg"])
-dome_light = dome.lights[0]
-dome_light.CreateIntensityAttr(3000.0)
+#dome.set_texture_files(texture_files=[assets_root_path + "/Isaac/Materials/Textures/Patterns/nv_brick_tile.jpg"])
+#dome_light = dome.lights[0]
+#dome_light.CreateIntensityAttr(3000.0)
 
 distant_light = distant.lights[0]
 distant_light.CreateIntensityAttr(6500.0)
@@ -135,12 +135,12 @@ while simulation_app.is_running():
 #for _ in range(1):
     contorller.post_reset()
 
-    for _ in range(12):
+    for _ in range(4):
         my_world.step(render=True)
 
-    for _ in range(50):
+    for _ in range(25):
         state_obs = contorller.get_state_obs()
-        contorller.forward(state_obs)
+        contorller.forward(state_obs, True)
         for _ in range(4):
             my_world.step(render=True)
         count += 1

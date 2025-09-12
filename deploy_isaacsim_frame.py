@@ -14,6 +14,7 @@ from isaacsim.core.utils.types import ArticulationAction
 from isaacsim.core.utils.viewports import set_camera_view
 from isaacsim.storage.native import get_assets_root_path
 from omni.isaac.sensor import Camera
+from isaacsim.core.experimental.objects import DomeLight, DistantLight
 
 from contorller.frame_policy_controller import FramePolicyController
 from contorller.load_config import get_articulation_props, get_physics_properties, get_robot_joint_properties, parse_env_config
@@ -33,6 +34,13 @@ my_world.scene.add_default_ground_plane()  # add ground plane
 set_camera_view(
     eye=[0.0, 2.5, 1.5], target=[0.00, 0.00, 0.00], camera_prim_path="/OmniverseKit_Persp"
 )  # set camera view
+
+distant = DistantLight(
+    paths="/World/DistantLight"
+)
+
+distant_light = distant.lights[0]
+distant_light.CreateIntensityAttr(6500.0)
 
 table_xform_prim_path = "/World/TableXform"
 table_rigidbody_prim_path = "/World/TableXform/Table"
@@ -120,7 +128,11 @@ while simulation_app.is_running():
 
     for _ in range(100):
         frame_obs = contorller.get_camera_obs()
-        contorller.forward(frame_obs)
+        state_obs = contorller.get_state_obs()
+        
+        contorller.compare_feature(state_obs, frame_obs)
+
+        contorller.forward(frame_obs, True)
         for _ in range(4):
             my_world.step(render=True)
         count += 1

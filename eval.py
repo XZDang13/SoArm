@@ -40,7 +40,7 @@ class Trainer:
         self.encoder = EncoderNet(self.obs_dim, [256, 256, 256]).to(self.device)
         self.actor = StochasticDDPGActor(self.encoder.dim, [256, 256], self.action_dim).to(self.device)
 
-        encoder_params, actor_params, _ = torch.load("model.pth")
+        encoder_params, actor_params, _ = torch.load("state_model.pth")
         self.encoder.load_state_dict(encoder_params)
         self.actor.load_state_dict(actor_params)
 
@@ -48,12 +48,16 @@ class Trainer:
         self.actor.eval()
 
     @torch.no_grad()
-    def get_action(self, obs_dict:dict[str, torch.Tensor]) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+    def get_action(self, obs_dict:dict[str, torch.Tensor], deterministic=False) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         obs = obs_dict["policy"]
 
         feature = self.encoder(obs)
         step:DeterministicContinuousPolicyStep = self.actor(feature, std=1.0)
-        action = step.mean
+
+        if deterministic:
+            action = step.mean
+        else:    
+            action = step.pi.rsample()
 
         return action
     
@@ -61,7 +65,7 @@ class Trainer:
         obs_dict, info = self.env.reset()
 
         for i in range(1000):
-            action = self.get_action(obs_dict)
+            action = self.get_action(obs_dict, False)
             #print(action)
             
             next_obs_dict, reward, terminate, timeout, info = self.env.step(action)

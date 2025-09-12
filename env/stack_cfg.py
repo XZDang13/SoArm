@@ -35,7 +35,6 @@ class EventCfg:
         },
     )
 
-
 @configclass
 class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
     episode_length_s = 2.0
