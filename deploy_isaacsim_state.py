@@ -131,15 +131,17 @@ for _ in range(120):
 
 count = 0
 
-while simulation_app.is_running():
-#for _ in range(1):
+#while simulation_app.is_running():
+for _ in range(1):
     contorller.post_reset()
 
     for _ in range(4):
         my_world.step(render=True)
 
-    for _ in range(25):
+    for i in range(25):
         state_obs = contorller.get_state_obs()
+        frame, pre_frame = contorller.get_camera_obs()
+        frame.save(f"imgs/{i}.jpg")
         contorller.forward(state_obs, True)
         for _ in range(4):
             my_world.step(render=True)

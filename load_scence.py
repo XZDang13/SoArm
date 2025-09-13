@@ -1,4 +1,15 @@
 from isaacsim import SimulationApp
+import os
+
+base_folder = "replays"
+
+# Define subfolders
+subfolders = ["json", "img"]
+
+# Loop through and create them if needed
+for sub in subfolders:
+    path = os.path.join(base_folder, sub)
+    os.makedirs(path, exist_ok=True)
 
 simulation_app = SimulationApp({"headless": True})  # start the simulation app, with GUI open
 
@@ -218,21 +229,38 @@ class Controller:
         self.robots.apply_action(action)
 
 
+def untile_image(tiled_img, tile_rows=8, tile_cols=8, tile_h=480, tile_w=640):
+    tiles = []
+    for i in range(tile_rows):
+        for j in range(tile_cols):
+            tile = tiled_img[
+                i*tile_h:(i+1)*tile_h,
+                j*tile_w:(j+1)*tile_w,
+                :
+            ]
+            tiles.append(tile)
+
+    return tiles
+
 class Writer:
     @staticmethod
-    def save_data(trajectory_id: str, step: int, state_obs, frame_obs):
+    def save_data(trajectory_id: str, step: int, state_obs, frame_obs, tile_rows, tile_cols):
         pre_step = max(step, step-1)
-        data = {
-            "states": state_obs.cpu().tolist(),
-            "frames": [f"replays/img/{trajectory_id}_{step}.png", f"replays/img/{trajectory_id}_{pre_step}.png"]
-        }
+        state_obs = state_obs.cpu().tolist()
+        frames = untile_image(frame_obs, tile_rows, tile_cols)
 
-        frames = Image.fromarray(frame_obs)
-        frames.save(f"replays/img/{trajectory_id}_{step}.jpg")
-        #cv2.imwrite(f"replays/img/{trajectory_id}_{step}.jpg", frame_obs, [cv2.IMWRITE_JPEG_QUALITY, 95])
+        for env_id in range(num_envs):
+            data = {
+                "states": state_obs[env_id],
+                "frames": [f"replays/img/{trajectory_id}_{env_id}_{step}.jpg",
+                           f"replays/img/{trajectory_id}_{env_id}_{pre_step}.jpg"]
+            }
 
-        with open(f"replays/json/{trajectory_id}_{step}.json", "w") as f:
-            json.dump(data, f)
+            frame = Image.fromarray(frames[env_id])
+            frame.save(f"replays/img/{trajectory_id}_{env_id}_{step}.jpg")
+
+            with open(f"replays/json/{trajectory_id}_{env_id}_{step}.json", "w") as f:
+                json.dump(data, f)
 
 # preparing the scene
 assets_root_path = get_assets_root_path()
@@ -243,26 +271,13 @@ if assets_root_path is None:
 
 open_stage(usd_path="scene.usd")
 
-'''
-stage = get_context().get_stage()
-scene_path = "PhysicsScene"
-if not stage.GetPrimAtPath(scene_path):
-    physicsUtils.add_physics_scene(stage, scene_path)
-
-scene_prim = stage.GetPrimAtPath(scene_path)
-physx_api = PhysxSchema.PhysxSceneAPI.Apply(scene_prim)
-
-physx_api.CreateEnableGPUDynamicsAttr().Set(True)
-physx_api.CreateGpuFoundLostAggregatePairsCapacityAttr().Set(4096)
-
-physx_api.CreateGpuTotalAggregatePairsCapacityAttr().Set(8192)
-physx_api.CreateGpuFoundLostPairsCapacityAttr().Set(1 << 22)
-'''
-
 my_world = World(physics_dt=1/120, rendering_dt=1/120, stage_units_in_meters=1.0,
                  backend="torch", device="cuda:0")
 
-num_envs = 16
+tile_rows = 8
+tile_cols = 8
+num_envs = tile_rows * tile_cols
+
 cloner = GridCloner(spacing=5.0)
 
 clone_paths = cloner.generate_paths("/World/env", num_envs)
@@ -290,7 +305,7 @@ for _ in range(60):
     my_world.step(render=True)
 
 start = time.perf_counter()
-for _ in range(5):
+for _ in range(50):
     trajectory_id = str(uuid4())
     controller.reset()
 
@@ -300,8 +315,11 @@ for _ in range(5):
     for i in range(50):
         state_obs = controller.get_state_obs()
         frame_obs = controller.get_frame()
-        Writer.save_data(trajectory_id, i, state_obs, frame_obs)
+
+        Writer.save_data(trajectory_id, i, state_obs, frame_obs, tile_rows, tile_cols)
+
         controller.forward(state_obs, True)
+
         for _ in range(4):
             my_world.step(render=True)
 
