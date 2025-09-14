@@ -42,8 +42,8 @@ from PIL import Image
 from model.actor_critic import EncoderNet, FrameObservationEncoderNet, StochasticDDPGActor
 
 from env.utils import map_to_yaw_rep
-from contorller.state_policy_controller import PolicyController
-from contorller.load_config import get_articulation_props, get_physics_properties, get_robot_joint_properties, parse_env_config
+from controller.state_policy_controller import PolicyController
+from controller.load_config import get_articulation_props, get_physics_properties, get_robot_joint_properties, parse_env_config
 
 @torch.jit.script
 def quat_from_euler_xyz(roll: torch.Tensor, pitch: torch.Tensor, yaw: torch.Tensor) -> torch.Tensor:

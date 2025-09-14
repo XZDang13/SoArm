@@ -31,7 +31,7 @@ from isaacsim.core.experimental.objects import DomeLight, DistantLight
 
 from writer import Writer
 
-from contorller.state_policy_controller import StatePolicyController
+from controller.state_policy_controller import StatePolicyController
 
 first_step = True
 reset_needed = False

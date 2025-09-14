@@ -45,6 +45,6 @@ class PairDataset(Dataset):
 
 def get_dataloader():
     dataset = PairDataset("replays")
-    dataloader = DataLoader(dataset, batch_size=256, shuffle=True, num_workers=16)
+    dataloader = DataLoader(dataset, batch_size=512, shuffle=True, num_workers=16)
 
     return dataloader

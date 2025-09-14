@@ -3,6 +3,7 @@ from typing import Optional
 
 import carb
 import numpy as np
+import random
 import omni
 import torch
 from torchvision.transforms import v2
@@ -72,6 +73,27 @@ def sample_in_annular_sector(n,
     y = cy + r * torch.sin(theta)
     return x, y
 
+def sample_from_range(num_envs, range=None, device=None):
+    if device is None:
+        device = torch.device('cpu')
+
+    if range is None:
+        value = torch.empty(num_envs, device=device).fill_(0.0)
+    else:
+        value = torch.empty(num_envs, device=device).uniform_(range[0], range[1])
+
+    return value
+
+def sample_quat(num_envs, x_range=None, y_range=None, z_range=None, device=None):
+    
+    euler_x = sample_from_range(num_envs, x_range, device)
+    euler_y = sample_from_range(num_envs, y_range, device)
+    euler_z = sample_from_range(num_envs, z_range, device)
+
+    quat = quat_from_euler_xyz(euler_x, euler_y, euler_z)
+
+    return quat
+
 def untile_image(tiled_img, tile_rows=8, tile_cols=8, tile_h=480, tile_w=640):
     tiles = []
     for i in range(tile_rows):
@@ -86,28 +108,34 @@ def untile_image(tiled_img, tile_rows=8, tile_cols=8, tile_h=480, tile_w=640):
     return tiles
 
 class Controller:
-    def __init__(self, robots, cubes, cameras, tile_rows, tile_cols):
+    def __init__(self, robots, cubes, cameras, tile_rows, tile_cols,
+                 state_encoder_path=None, frame_encoder_path=None):
         self.robots = robots
         self.cubes = cubes
         self.cameras = cameras
         self.num_envs = len(self.robots.prims)
 
         self.device = torch.device("cuda:0")
-        
-        self.frame_encoder = FrameObservationEncoderNet(6, 256).to(self.device)
-        self.state_encoder = EncoderNet(6+6+3+4+3+4, [256, 256]).to(self.device)
-        self.actor = StochasticDDPGActor(self.frame_encoder.dim, [256], 6).to(self.device)
 
-        state_encoder_params, actor_params, _ = torch.load("state_model.pth")
-        self.state_encoder.load_state_dict(state_encoder_params)
-        self.actor.load_state_dict(actor_params)
+        self.state_encoder = None
+        self.frame_encoder = None
+        self.actor = None
 
-        #frame_encoder_params, _, _ = torch.load("frame_model.pth")
-        #self.frame_encoder.load_state_dict(frame_encoder_params)
+        if state_encoder_path is not None:
+            self.state_encoder = EncoderNet(6+6+3+4+3+4, [256, 256, 256]).to(self.device)
+            self.actor = StochasticDDPGActor(self.state_encoder.dim, [256, 256], 6).to(self.device)
 
-        self.state_encoder.eval()
-        self.frame_encoder.eval()
-        self.actor.eval()
+            state_encoder_params, actor_params, _ = torch.load("state_model.pth")
+            self.state_encoder.load_state_dict(state_encoder_params)
+            self.actor.load_state_dict(actor_params)
+            self.state_encoder.eval()
+            self.actor.eval()
+
+        if frame_encoder_path is not None:
+            self.frame_encoder = FrameObservationEncoderNet(6, 256).to(self.device)
+            frame_encoder_params, _, _ = torch.load("frame_model.pth")
+            self.frame_encoder.load_state_dict(frame_encoder_params)
+            self.frame_encoder.eval()
 
         self._action_scale = 0.15
 
@@ -183,12 +211,18 @@ class Controller:
         return torch.cat([frame, pre_frame], dim=1)
     
     def get_state_feature(self, obs):
+        if self.state_encoder is None:
+            return None
+        
         obs = obs.to(self.device)
         feature = self.state_encoder(obs)
 
         return feature
     
     def get_frame_feature(self, obs):
+        if self.frame_encoder is None:
+            return None
+        
         obs = obs.to(self.device)
         feature = self.frame_encoder(obs, True)
 
@@ -203,18 +237,16 @@ class Controller:
     def reset(self):
         self.robots.post_reset()
         cube_offset_x, cube_offset_y = sample_in_annular_sector(self.num_envs, 0.225, 0.325,
-                                                                -np.pi/3, np.pi/3, device=self.device)
+                                                                -np.pi/4, np.pi/4, device=self.device)
         cube_pos = self.robots_position.clone()
         cube_pos[:, 0] += cube_offset_x
         cube_pos[:, 1] += cube_offset_y
 
-        euler_x = torch.empty(self.num_envs, device=self.device).fill_(0.0)
-        euler_y = torch.empty(self.num_envs, device=self.device).fill_(0.0)
-        euler_z = torch.empty(self.num_envs, device=self.device).uniform_(-torch.pi/4, torch.pi/4)
-
-        cube_quat = quat_from_euler_xyz(euler_x, euler_y, euler_z)
+        cube_quat = sample_quat(self.num_envs, z_range=[-torch.pi/4, torch.pi/4], device=self.device)
 
         self.cubes.set_world_poses(cube_pos, cube_quat)
+        velocities = torch.zeros((self.num_envs, 6), device=self.device)
+        self.cubes.set_velocities(velocities)
 
         self.target_joint_pos = self.robots.get_joint_positions().clone()
         self.pre_joint_pos = self.robots.get_joint_positions().clone()
@@ -240,3 +272,44 @@ class Controller:
         
         action = ArticulationActions(joint_positions=self.target_joint_pos)
         self.robots.apply_action(action)
+
+class RandomLights:
+    def __init__(self, dome_light, distant_light, assets_root_path):
+        self.dome_light = dome_light
+        self.distant_light = distant_light
+        self.assets_root_path = assets_root_path
+        self.background_assets = [
+            "/Isaac/Materials/Textures/Backgrounds/nv_airport.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_alaska.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_arches.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_ariel_narita.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_alaska.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_australia.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_banff_lake_1.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_banff_lake_3.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_beach_lagoon.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_bay_sf.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_city_foggy.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_beach_rocky_lagoon.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_coconino_mountain.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_craterlake_2.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_cy_nashville_night_river.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_grand_canyon_2.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_grass_rainbow_maui.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_lagoon_ocean.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_lake_trees_mountain.jpg",
+            "/Isaac/Materials/Textures/Backgrounds/nv_mountain_overlook_fog.jpg",
+        ]
+
+    def set_lights(self):
+        background_asset = random.choice(self.background_assets)
+        asset_path = self.assets_root_path + background_asset
+        self.dome_light.set_texture_files(texture_files=[asset_path])
+
+        dome_light_quat = sample_quat(1, x_range=[-torch.pi, torch.pi],
+                                    y_range=[-torch.pi, torch.pi]).tolist()
+        self.dome_light.set_world_poses(orientations=dome_light_quat)
+
+        distant_light_quat = sample_quat(1, x_range=[-torch.pi, torch.pi],
+                                    y_range=[-torch.pi, torch.pi]).tolist()
+        self.distant_light.set_world_poses(orientations=distant_light_quat)

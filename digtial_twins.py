@@ -18,7 +18,9 @@ from isaacsim.core.experimental.objects import DomeLight, DistantLight
 from isaacsim.core.utils.stage import open_stage
 from omni.kit.app import get_app_interface
 import omni.appwindow
+from isaacsim.core.experimental.objects import DomeLight
 
+from controller.controller import RandomLights
 from PIL import Image
 
 first_step = True
@@ -39,6 +41,12 @@ set_camera_view(
     eye=[0.0, 2.5, 1.5], target=[0.00, 0.00, 0.00], camera_prim_path="/OmniverseKit_Persp"
 )  # set camera view
 
+dome_light = DomeLight(
+    "/Environment/DomeLight"
+)
+distant_light = DistantLight(
+    "/Environment/DistantLight"
+)
 
 color_camera = Camera(
     prim_path="/World/env_0/Realsense/RSD455/Camera_OmniVision_OV9782_Color",

@@ -19,8 +19,8 @@ from isaacsim.core.utils.stage import open_stage
 
 from PIL import Image
 
-from contorller.state_policy_controller import StatePolicyController
-from contorller.load_config import get_articulation_props, get_physics_properties, get_robot_joint_properties, parse_env_config
+from controller.state_policy_controller import StatePolicyController
+from controller.load_config import get_articulation_props, get_physics_properties, get_robot_joint_properties, parse_env_config
 
 first_step = True
 reset_needed = False

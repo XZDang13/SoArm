@@ -37,7 +37,7 @@ class EncoderNet(nn.Module):
         for layer in self.layers:
             x = layer(x)
             x = F.silu(x)
-            x = F.dropout(x, p=0.15, training=aug)
+        x = F.dropout(x, p=0.2, training=aug)
 
         return x
     
@@ -82,10 +82,10 @@ class FrameObservationEncoderNet(nn.Module):
         self.dim = feature_dim
 
         self.cnn_layers = nn.Sequential(
-            Conv2DLayer(in_channel, 64, 3, 2, 1, F.silu, False),
-            Conv2DLayer(64, 128, 3, 2, 1, F.silu, False),
-            Conv2DLayer(128, 256, 3, 2, 1, F.silu, False),
-            Conv2DLayer(256, 512, 3, 2, 1, F.silu, False)
+            Conv2DLayer(in_channel, 64, 3, 2, 1, F.silu, True),
+            Conv2DLayer(64, 128, 3, 2, 1, F.silu, True),
+            Conv2DLayer(128, 256, 3, 2, 1, F.silu, True),
+            Conv2DLayer(256, 512, 3, 2, 1, F.silu, True)
         )
         
         self.mlp_layer = nn.Sequential(
