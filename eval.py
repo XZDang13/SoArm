@@ -65,7 +65,7 @@ class Trainer:
         obs_dict, info = self.env.reset()
 
         for i in range(1000):
-            action = self.get_action(obs_dict, False)
+            action = self.get_action(obs_dict, True)
             #print(action)
             
             next_obs_dict, reward, terminate, timeout, info = self.env.step(action)

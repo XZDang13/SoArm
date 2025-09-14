@@ -296,8 +296,6 @@ class Controller:
         action = ArticulationActions(joint_positions=self.target_joint_pos)
         self.robots.apply_action(action)
 
-    def save(self):
-        torch.save([self.frame_encoder.state_dict(), self.actor.state_dict()], "frame_model.pth")
 
 # preparing the scene
 assets_root_path = get_assets_root_path()

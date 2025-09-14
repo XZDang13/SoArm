@@ -1,6 +1,7 @@
 import time
 import numpy as np
 import cv2
+from PIL import Image
 
 from lerobot.cameras.realsense.configuration_realsense import RealSenseCameraConfig
 from lerobot.cameras.realsense.camera_realsense import RealSenseCamera
@@ -48,7 +49,7 @@ try:
     #depth_map = camera.read_depth()
     print("Color frame shape:", color_frame.shape)
     #print("Depth map shape:", depth_map.shape)
-
+    Image.fromarray(color_frame).save("real.png")
     window_color = "RealSense Color"
     #window_depth = "RealSense Depth"
     cv2.namedWindow(window_color, cv2.WINDOW_NORMAL)
@@ -64,7 +65,7 @@ try:
 
         color_frame = camera.read()        # RGB
         #depth_map = camera.read_depth()    # float meters or uint16
-
+        
         if color_frame is None:
             # If grab failed, skip this iteration
             continue
@@ -87,13 +88,12 @@ try:
 
         frames += 1
 
-        color_bgr_resize = cv2.resize(color_bgr, (224, 224))
 
         # Put FPS on color image
         cv2.putText(color_bgr, f"FPS: {ema_fps:.1f}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv2.LINE_AA)
 
-        cv2.imshow(window_color, color_bgr_resize)
+        cv2.imshow(window_color, color_bgr)
         #cv2.imshow(window_depth, depth_vis)
 
         # Exit on 'q'

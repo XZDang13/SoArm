@@ -11,7 +11,7 @@ for sub in subfolders:
     path = os.path.join(base_folder, sub)
     os.makedirs(path, exist_ok=True)
 
-simulation_app = SimulationApp({"headless": False})  # start the simulation app, with GUI open
+simulation_app = SimulationApp({"headless": True})  # start the simulation app, with GUI open
 
 import sys
 
@@ -44,8 +44,6 @@ from PIL import Image
 from model.actor_critic import EncoderNet, StochasticDDPGActor
 
 from env.utils import map_to_yaw_rep
-from contorller.state_policy_controller import PolicyController
-from contorller.load_config import get_articulation_props, get_physics_properties, get_robot_joint_properties, parse_env_config
 
 @torch.jit.script
 def quat_from_euler_xyz(roll: torch.Tensor, pitch: torch.Tensor, yaw: torch.Tensor) -> torch.Tensor:
@@ -115,8 +113,8 @@ class Controller:
         self.num_envs = len(self.robots.prims)
 
         self.device = torch.device("cuda:0")
-        self.encoder = EncoderNet(6+6+3+4+3+4, [256, 256, 256]).to(self.device)
-        self.actor = StochasticDDPGActor(self.encoder.dim, [256, 256], 6).to(self.device)
+        self.encoder = EncoderNet(6+6+3+4+3+4, [256, 256]).to(self.device)
+        self.actor = StochasticDDPGActor(self.encoder.dim, [256], 6).to(self.device)
 
         encoder_params, actor_params, _ = torch.load("state_model.pth")
         self.encoder.load_state_dict(encoder_params)
@@ -245,7 +243,7 @@ def untile_image(tiled_img, tile_rows=8, tile_cols=8, tile_h=480, tile_w=640):
 class Writer:
     @staticmethod
     def save_data(trajectory_id: str, step: int, state_obs, frame_obs, tile_rows, tile_cols):
-        pre_step = max(step, step-1)
+        pre_step = max(0, step-1)
         state_obs = state_obs.cpu().tolist()
         frames = untile_image(frame_obs, tile_rows, tile_cols)
 
@@ -274,8 +272,8 @@ open_stage(usd_path="scene.usd")
 my_world = World(physics_dt=1/120, rendering_dt=1/120, stage_units_in_meters=1.0,
                  backend="torch", device="cuda:0")
 
-tile_rows = 2
-tile_cols = 2
+tile_rows = 10
+tile_cols = 10
 num_envs = tile_rows * tile_cols
 
 print(num_envs)
@@ -302,25 +300,27 @@ controller = Controller(robots, cubes, color_cameras)
 my_world.reset()
 controller.initialize()
 
+controller.reset()
 
 for _ in range(60):
     my_world.step(render=True)
 
+
 start = time.perf_counter()
-for _ in range(25):
+for _ in range(40):
     trajectory_id = str(uuid4())
     controller.reset()
 
     for _ in range(12):
         my_world.step(render=True)
     
-    for i in range(40):
+    for i in range(25):
         state_obs = controller.get_state_obs()
         frame_obs = controller.get_frame()
 
-        #Writer.save_data(trajectory_id, i, state_obs, frame_obs, tile_rows, tile_cols)
+        Writer.save_data(trajectory_id, i, state_obs, frame_obs, tile_rows, tile_cols)
 
-        controller.forward(state_obs, False)
+        controller.forward(state_obs, True)
 
         for _ in range(4):
             my_world.step(render=True)

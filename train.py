@@ -54,10 +54,10 @@ class Trainer:
         self.action_dim = self.env.action_space.shape[1]
         self.device = self.env.unwrapped.device
 
-        self.encoder = EncoderNet(self.obs_dim, [256, 256, 256]).to(self.device)
-        self.actor = StochasticDDPGActor(self.encoder.dim, [256, 256], self.action_dim).to(self.device)
-        self.critic = Critic(self.encoder.dim, [256, 256], self.action_dim).to(self.device)
-        self.critic_target = Critic(self.encoder.dim, [256, 256], self.action_dim).to(self.device)
+        self.encoder = EncoderNet(self.obs_dim, [256, 256]).to(self.device)
+        self.actor = StochasticDDPGActor(self.encoder.dim, [256], self.action_dim).to(self.device)
+        self.critic = Critic(self.encoder.dim, [256], self.action_dim).to(self.device)
+        self.critic_target = Critic(self.encoder.dim, [256], self.action_dim).to(self.device)
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         for param in self.critic_target.parameters():
@@ -82,7 +82,7 @@ class Trainer:
         
         self.obs = None
 
-        self.epochs = 500
+        self.epochs = 250
         self.update_iteration = 50
         self.batch_size = self.env_nums * 10
         self.gamma = 0.95

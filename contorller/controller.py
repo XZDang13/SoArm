@@ -5,10 +5,11 @@ import carb
 import numpy as np
 import omni
 import torch
+from torchvision.transforms import v2
 from isaacsim.core.utils.types import ArticulationActions
 from PIL import Image
 
-from model.actor_critic import EncoderNet, StochasticDDPGActor
+from model.actor_critic import EncoderNet, FrameObservationEncoderNet, StochasticDDPGActor
 from env.utils import map_to_yaw_rep
 
 @torch.jit.script
@@ -80,29 +81,45 @@ def untile_image(tiled_img, tile_rows=8, tile_cols=8, tile_h=480, tile_w=640):
                 j*tile_w:(j+1)*tile_w,
                 :
             ]
-            tiles.append(tile)
+            tiles.append(Image.fromarray(tile))
 
     return tiles
 
 class Controller:
-    def __init__(self, robots, cubes, cameras):
+    def __init__(self, robots, cubes, cameras, tile_rows, tile_cols):
         self.robots = robots
         self.cubes = cubes
         self.cameras = cameras
         self.num_envs = len(self.robots.prims)
 
         self.device = torch.device("cuda:0")
-        self.encoder = EncoderNet(6+6+3+4+3+4, [256, 256, 256]).to(self.device)
-        self.actor = StochasticDDPGActor(self.encoder.dim, [256, 256], 6).to(self.device)
+        
+        self.frame_encoder = FrameObservationEncoderNet(6, 256).to(self.device)
+        self.state_encoder = EncoderNet(6+6+3+4+3+4, [256, 256]).to(self.device)
+        self.actor = StochasticDDPGActor(self.frame_encoder.dim, [256], 6).to(self.device)
 
-        encoder_params, actor_params, _ = torch.load("state_model.pth")
-        self.encoder.load_state_dict(encoder_params)
+        state_encoder_params, actor_params, _ = torch.load("state_model.pth")
+        self.state_encoder.load_state_dict(state_encoder_params)
         self.actor.load_state_dict(actor_params)
 
-        self.encoder.eval()
+        #frame_encoder_params, _, _ = torch.load("frame_model.pth")
+        #self.frame_encoder.load_state_dict(frame_encoder_params)
+
+        self.state_encoder.eval()
+        self.frame_encoder.eval()
         self.actor.eval()
 
         self._action_scale = 0.15
+
+        self.transform = v2.Compose([
+            v2.ToImage(),
+            v2.Resize((112, 112)),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        ])
+
+        self.tile_rows = tile_rows
+        self.tile_cols = tile_cols
 
     def set_props(self):
         # joint PD gains (use float32, shapes [num_envs, dof])
@@ -147,6 +164,35 @@ class Controller:
         pre_cube_quat = map_to_yaw_rep(pre_cube_quat, xyzw=False)
 
         return torch.cat([cube_pos, cube_quat, joint_pos, pre_cube_pos, pre_cube_quat, pre_joint_pos], dim=1)
+    
+    def process_tile_image(self, frame):
+        frame = untile_image(frame, self.tile_rows, self.tile_cols)
+        frame = torch.stack(self.transform(frame))
+
+        return frame
+
+    def get_camera_obs(self):
+        frame = self.get_frame()
+        pre_frame = self.pre_frame.copy()
+
+        self.pre_frame = frame.copy()
+
+        frame = self.process_tile_image(frame)
+        pre_frame = self.process_tile_image(pre_frame)
+
+        return torch.cat([frame, pre_frame], dim=1)
+    
+    def get_state_feature(self, obs):
+        obs = obs.to(self.device)
+        feature = self.state_encoder(obs)
+
+        return feature
+    
+    def get_frame_feature(self, obs):
+        obs = obs.to(self.device)
+        feature = self.frame_encoder(obs, True)
+
+        return feature
 
     def initialize(self):
         self.robots.initialize()
@@ -177,19 +223,9 @@ class Controller:
         self.pre_cube_quat = cube_quat.clone()
         self.pre_frame = self.get_frame().copy()
 
-    def _compute_action(self, obs: np.ndarray, deterministic:bool=True) -> np.ndarray:
-        """
-        Computes the action from the observation using the loaded policy.
-
-        Args:
-            obs (np.ndarray): The observation.
-
-        Returns:
-            np.ndarray: The action.
-        """
+    def _compute_action(self, feature, deterministic:bool=True) -> np.ndarray:
+        
         with torch.no_grad():
-            obs = obs.float().to(self.device)
-            feature = self.encoder(obs, True)
             step = self.actor(feature, std=1.0)
             if deterministic:
                 action = step.mean
@@ -198,8 +234,8 @@ class Controller:
             action = action
         return action
     
-    def forward(self, obs, deterministic):
-        self.action = self._compute_action(obs, deterministic)
+    def forward(self, feature, deterministic):
+        self.action = self._compute_action(feature, deterministic)
         self.target_joint_pos = self.action * self._action_scale + self.robots.get_joint_positions()
         
         action = ArticulationActions(joint_positions=self.target_joint_pos)

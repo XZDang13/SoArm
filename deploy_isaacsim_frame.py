@@ -4,21 +4,23 @@ simulation_app = SimulationApp({"headless": False})  # start the simulation app,
 
 import sys
 
+import torch.nn.functional as F
+
 import carb
 import numpy as np
 from isaacsim.core.api import World
-from isaacsim.core.prims import SingleArticulation, SingleRigidPrim, SingleXFormPrim
-from isaacsim.core.utils.stage import add_reference_to_stage, get_stage_units
+from isaacsim.core.prims import Articulation, RigidPrim, XFormPrim
+from isaacsim.core.utils.stage import open_stage
 from isaacsim.core.utils.prims import get_prim_at_path
 from isaacsim.core.utils.types import ArticulationAction
 from isaacsim.core.utils.viewports import set_camera_view
 from isaacsim.storage.native import get_assets_root_path
-from omni.isaac.sensor import Camera
-from isaacsim.core.utils.stage import open_stage
+from omni.isaac.sensor import CameraView
+from isaacsim.core.utils.rotations import euler_angles_to_quat
+from isaacsim.core.utils.types import ArticulationActions
+from isaacsim.core.cloner import GridCloner
 
-
-from contorller.frame_policy_controller import FramePolicyController
-from contorller.load_config import get_articulation_props, get_physics_properties, get_robot_joint_properties, parse_env_config
+from contorller.controller import Controller
 
 first_step = True
 reset_needed = False
@@ -32,63 +34,66 @@ if assets_root_path is None:
     
 open_stage(usd_path="scene.usd")
 
-my_world = World(physics_dt=1/120, rendering_dt=1/120, stage_units_in_meters=1.0)
-my_world.scene.add_default_ground_plane()  # add ground plane
+my_world = World(physics_dt=1/120, rendering_dt=1/120, stage_units_in_meters=1.0,
+                 backend="torch", device="cuda:0")
+
 set_camera_view(
     eye=[0.0, 2.5, 1.5], target=[0.00, 0.00, 0.00], camera_prim_path="/OmniverseKit_Persp"
 )  # set camera view
 
-robot = SingleArticulation(prim_path="/World/env_0/so101", name="robot")
-cube = SingleRigidPrim(
-    prim_path="/World/env_0/Cube/Cube", name="cube"
+tile_rows = 1
+tile_cols = 1
+num_envs = tile_rows * tile_cols
+
+print(num_envs)
+
+cloner = GridCloner(spacing=5.0)
+
+clone_paths = cloner.generate_paths("/World/env", num_envs)
+cloner.clone(
+    source_prim_path="/World/env_0",
+    prim_paths=clone_paths,
+    copy_from_source=True,
 )
 
-color_camera = Camera(
-    prim_path="/World/env_0/Realsense/RSD455/Camera_OmniVision_OV9782_Color",
-    resolution=(640, 480),
-    frequency=120,
+
+robots = Articulation(prim_paths_expr=["/World/env_.*/so101"], name="robot")
+cubes = RigidPrim(prim_paths_expr=["/World/env_.*/Cube/Cube"], name="cube")
+color_cameras = CameraView(
+    prim_paths_expr=["/World/env_.*/Realsense/RSD455/Camera_OmniVision_OV9782_Color"],
+    camera_resolution=(640, 480)
 )
 
-contorller = FramePolicyController(
-    robot, cube, color_camera
-)
+controller = Controller(robots, cubes, color_cameras, tile_rows, tile_cols)
 
 my_world.reset()
-contorller.initialize()
-robot.post_reset()
+controller.initialize()
 
 for _ in range(60):
     my_world.step(render=True)
 
 count = 0
 
+controller.reset()
 while simulation_app.is_running():
-#for _ in range(1):
-    contorller.post_reset()
-
+    controller.reset()
     for _ in range(12):
         my_world.step(render=True)
+    
+    for _ in range(25):
+        state_obs = controller.get_state_obs()
+        frame_obs = controller.get_camera_obs()
 
-    for _ in range(50):
-        frame_obs = contorller.get_camera_obs()
-        state_obs = contorller.get_state_obs()
-        
-        state_feat, frame_feat = contorller.compare_feature(state_obs, frame_obs)
+        state_feature = controller.get_state_feature(state_obs)
+        #frame_feature = controller.get_frame_feature(frame_obs)
 
-        contorller.forward(frame_feat, True)
+        #print(F.cosine_similarity(state_feature, frame_feature))
+
+        controller.forward(state_feature, True)
+
         for _ in range(4):
             my_world.step(render=True)
-        count += 1
 
-    for _ in range(50):
-        frame_obs = contorller.get_camera_obs()
-        state_obs = contorller.get_state_obs()
-        
-        state_feat, frame_feat = contorller.compare_feature(state_obs, frame_obs)
-
-        contorller.forward(state_feat, True)
-        for _ in range(4):
-            my_world.step(render=True)
-        count += 1
+    
 
 simulation_app.close()
