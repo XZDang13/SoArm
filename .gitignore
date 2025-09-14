@@ -2,3 +2,4 @@ __pycache__/
 *.py[cod]
 *$py.class
 replays/
+frame_model.pth

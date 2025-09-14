@@ -1,51 +1,15 @@
-from isaacsim import SimulationApp
-import os
-
-base_folder = "replays"
-
-# Define subfolders
-subfolders = ["json", "img"]
-
-# Loop through and create them if needed
-for sub in subfolders:
-    path = os.path.join(base_folder, sub)
-    os.makedirs(path, exist_ok=True)
-
-simulation_app = SimulationApp({"headless": False})  # start the simulation app, with GUI open
-
-import sys
-
-import torch
-import json
-from uuid import uuid4
-import time
-
-from pxr import Usd, UsdPhysics
-from omni.usd import get_context
-from omni.physx.scripts import physicsUtils
-from pxr import PhysxSchema
+import io
+from typing import Optional
 
 import carb
 import numpy as np
-from isaacsim.core.api import World
-from isaacsim.core.prims import Articulation, RigidPrim, XFormPrim
-from isaacsim.core.utils.stage import open_stage
-from isaacsim.core.utils.prims import get_prim_at_path
-from isaacsim.core.utils.types import ArticulationAction
-from isaacsim.core.utils.viewports import set_camera_view
-from isaacsim.storage.native import get_assets_root_path
-from omni.isaac.sensor import CameraView
-from isaacsim.core.utils.rotations import euler_angles_to_quat
+import omni
+import torch
 from isaacsim.core.utils.types import ArticulationActions
-from isaacsim.core.cloner import GridCloner
-
-import cv2
 from PIL import Image
-from model.actor_critic import EncoderNet, StochasticDDPGActor
 
+from model.actor_critic import EncoderNet, StochasticDDPGActor
 from env.utils import map_to_yaw_rep
-from contorller.state_policy_controller import PolicyController
-from contorller.load_config import get_articulation_props, get_physics_properties, get_robot_joint_properties, parse_env_config
 
 @torch.jit.script
 def quat_from_euler_xyz(roll: torch.Tensor, pitch: torch.Tensor, yaw: torch.Tensor) -> torch.Tensor:
@@ -106,6 +70,19 @@ def sample_in_annular_sector(n,
     x = cx + r * torch.cos(theta)
     y = cy + r * torch.sin(theta)
     return x, y
+
+def untile_image(tiled_img, tile_rows=8, tile_cols=8, tile_h=480, tile_w=640):
+    tiles = []
+    for i in range(tile_rows):
+        for j in range(tile_cols):
+            tile = tiled_img[
+                i*tile_h:(i+1)*tile_h,
+                j*tile_w:(j+1)*tile_w,
+                :
+            ]
+            tiles.append(tile)
+
+    return tiles
 
 class Controller:
     def __init__(self, robots, cubes, cameras):
@@ -227,106 +204,3 @@ class Controller:
         
         action = ArticulationActions(joint_positions=self.target_joint_pos)
         self.robots.apply_action(action)
-
-
-def untile_image(tiled_img, tile_rows=8, tile_cols=8, tile_h=480, tile_w=640):
-    tiles = []
-    for i in range(tile_rows):
-        for j in range(tile_cols):
-            tile = tiled_img[
-                i*tile_h:(i+1)*tile_h,
-                j*tile_w:(j+1)*tile_w,
-                :
-            ]
-            tiles.append(tile)
-
-    return tiles
-
-class Writer:
-    @staticmethod
-    def save_data(trajectory_id: str, step: int, state_obs, frame_obs, tile_rows, tile_cols):
-        pre_step = max(step, step-1)
-        state_obs = state_obs.cpu().tolist()
-        frames = untile_image(frame_obs, tile_rows, tile_cols)
-
-        for env_id in range(num_envs):
-            data = {
-                "states": state_obs[env_id],
-                "frames": [f"replays/img/{trajectory_id}_{env_id}_{step}.jpg",
-                           f"replays/img/{trajectory_id}_{env_id}_{pre_step}.jpg"]
-            }
-
-            frame = Image.fromarray(frames[env_id])
-            frame.save(f"replays/img/{trajectory_id}_{env_id}_{step}.jpg")
-
-            with open(f"replays/json/{trajectory_id}_{env_id}_{step}.json", "w") as f:
-                json.dump(data, f)
-
-# preparing the scene
-assets_root_path = get_assets_root_path()
-if assets_root_path is None:
-    carb.log_error("Could not find Isaac Sim assets folder")
-    simulation_app.close()
-    sys.exit()
-
-open_stage(usd_path="scene.usd")
-
-my_world = World(physics_dt=1/120, rendering_dt=1/120, stage_units_in_meters=1.0,
-                 backend="torch", device="cuda:0")
-
-tile_rows = 2
-tile_cols = 2
-num_envs = tile_rows * tile_cols
-
-print(num_envs)
-
-cloner = GridCloner(spacing=5.0)
-
-clone_paths = cloner.generate_paths("/World/env", num_envs)
-cloner.clone(
-    source_prim_path="/World/env_0",
-    prim_paths=clone_paths,
-    copy_from_source=True,
-)
-
-
-robots = Articulation(prim_paths_expr=["/World/env_.*/so101"], name="robot")
-cubes = RigidPrim(prim_paths_expr=["/World/env_.*/Cube/Cube"], name="cube")
-color_cameras = CameraView(
-    prim_paths_expr=["/World/env_.*/Realsense/RSD455/Camera_OmniVision_OV9782_Color"],
-    camera_resolution=(640, 480)
-)
-
-controller = Controller(robots, cubes, color_cameras)
-
-my_world.reset()
-controller.initialize()
-
-
-for _ in range(60):
-    my_world.step(render=True)
-
-start = time.perf_counter()
-for _ in range(25):
-    trajectory_id = str(uuid4())
-    controller.reset()
-
-    for _ in range(12):
-        my_world.step(render=True)
-    
-    for i in range(40):
-        state_obs = controller.get_state_obs()
-        frame_obs = controller.get_frame()
-
-        #Writer.save_data(trajectory_id, i, state_obs, frame_obs, tile_rows, tile_cols)
-
-        controller.forward(state_obs, False)
-
-        for _ in range(4):
-            my_world.step(render=True)
-
-end = time.perf_counter()
-print(f"took {end - start:.4f} seconds")
-
-
-simulation_app.close()

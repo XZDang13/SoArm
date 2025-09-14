@@ -46,7 +46,7 @@ cube = SingleRigidPrim(
 color_camera = Camera(
     prim_path="/World/env_0/Realsense/RSD455/Camera_OmniVision_OV9782_Color",
     resolution=(640, 480),
-    frequency=30,
+    frequency=120,
 )
 
 contorller = FramePolicyController(
@@ -57,7 +57,7 @@ my_world.reset()
 contorller.initialize()
 robot.post_reset()
 
-for _ in range(120):
+for _ in range(60):
     my_world.step(render=True)
 
 count = 0
@@ -69,13 +69,24 @@ while simulation_app.is_running():
     for _ in range(12):
         my_world.step(render=True)
 
-    for _ in range(100):
+    for _ in range(50):
         frame_obs = contorller.get_camera_obs()
         state_obs = contorller.get_state_obs()
         
-        contorller.compare_feature(state_obs, frame_obs)
+        state_feat, frame_feat = contorller.compare_feature(state_obs, frame_obs)
 
-        contorller.forward(frame_obs, True)
+        contorller.forward(frame_feat, True)
+        for _ in range(4):
+            my_world.step(render=True)
+        count += 1
+
+    for _ in range(50):
+        frame_obs = contorller.get_camera_obs()
+        state_obs = contorller.get_state_obs()
+        
+        state_feat, frame_feat = contorller.compare_feature(state_obs, frame_obs)
+
+        contorller.forward(state_feat, True)
         for _ in range(4):
             my_world.step(render=True)
         count += 1

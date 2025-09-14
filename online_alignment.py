@@ -11,19 +11,17 @@ for sub in subfolders:
     path = os.path.join(base_folder, sub)
     os.makedirs(path, exist_ok=True)
 
-simulation_app = SimulationApp({"headless": False})  # start the simulation app, with GUI open
+simulation_app = SimulationApp({"headless": True})  # start the simulation app, with GUI open
 
 import sys
 
 import torch
+import torch.nn.functional as F
+import torch.optim as optim
+from torchvision.transforms import v2
 import json
 from uuid import uuid4
 import time
-
-from pxr import Usd, UsdPhysics
-from omni.usd import get_context
-from omni.physx.scripts import physicsUtils
-from pxr import PhysxSchema
 
 import carb
 import numpy as np
@@ -39,9 +37,9 @@ from isaacsim.core.utils.rotations import euler_angles_to_quat
 from isaacsim.core.utils.types import ArticulationActions
 from isaacsim.core.cloner import GridCloner
 
-import cv2
+
 from PIL import Image
-from model.actor_critic import EncoderNet, StochasticDDPGActor
+from model.actor_critic import EncoderNet, FrameObservationEncoderNet, StochasticDDPGActor
 
 from env.utils import map_to_yaw_rep
 from contorller.state_policy_controller import PolicyController
@@ -107,6 +105,25 @@ def sample_in_annular_sector(n,
     y = cy + r * torch.sin(theta)
     return x, y
 
+def compute_cosine_loss(x, y):
+    return 1. - F.cosine_similarity(x, y, dim=-1).mean()
+
+def compute_mse_loss(x, y):
+    return F.mse_loss(x, y, reduction="mean")
+
+def untile_image(tiled_img, tile_rows=8, tile_cols=8, tile_h=480, tile_w=640):
+    tiles = []
+    for i in range(tile_rows):
+        for j in range(tile_cols):
+            tile = tiled_img[
+                i*tile_h:(i+1)*tile_h,
+                j*tile_w:(j+1)*tile_w,
+                :
+            ]
+            tiles.append(Image.fromarray(tile))
+
+    return tiles
+
 class Controller:
     def __init__(self, robots, cubes, cameras):
         self.robots = robots
@@ -115,17 +132,30 @@ class Controller:
         self.num_envs = len(self.robots.prims)
 
         self.device = torch.device("cuda:0")
-        self.encoder = EncoderNet(6+6+3+4+3+4, [256, 256, 256]).to(self.device)
-        self.actor = StochasticDDPGActor(self.encoder.dim, [256, 256], 6).to(self.device)
+        self.frame_encoder = FrameObservationEncoderNet(6, 256).to(self.device)
+        self.state_encoder = EncoderNet(6+6+3+4+3+4, [256, 256, 256]).to(self.device)
+        self.actor = StochasticDDPGActor(self.frame_encoder.dim, [256, 256], 6).to(self.device)
 
         encoder_params, actor_params, _ = torch.load("state_model.pth")
-        self.encoder.load_state_dict(encoder_params)
+        self.state_encoder.load_state_dict(encoder_params)
         self.actor.load_state_dict(actor_params)
 
-        self.encoder.eval()
+        self.state_encoder.eval()
         self.actor.eval()
 
+        for param in self.state_encoder.parameters():
+            param.requires_grad = False
+
+        self.optimizer = optim.Adam(self.frame_encoder.parameters(), lr=1e-3, weight_decay=1e-4)
+
         self._action_scale = 0.15
+
+        self.transform = v2.Compose([
+            v2.ToImage(),
+            v2.Resize((112, 112)),
+            v2.ToDtype(torch.float32, scale=True),
+            v2.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
+        ])
 
     def set_props(self):
         # joint PD gains (use float32, shapes [num_envs, dof])
@@ -170,6 +200,46 @@ class Controller:
         pre_cube_quat = map_to_yaw_rep(pre_cube_quat, xyzw=False)
 
         return torch.cat([cube_pos, cube_quat, joint_pos, pre_cube_pos, pre_cube_quat, pre_joint_pos], dim=1)
+    
+    def process_tile_image(self, frame):
+        frame = untile_image(frame)
+        frame = torch.stack(self.transform(frame))
+
+        return frame
+
+    def get_camera_obs(self):
+        frame = self.get_frame()
+        pre_frame = self.pre_frame.copy()
+
+        self.pre_frame = frame.copy()
+
+        frame = self.process_tile_image(frame)
+        pre_frame = self.process_tile_image(pre_frame)
+
+        return torch.cat([frame, pre_frame], dim=1)
+    
+    def get_state_feature(self, obs):
+        obs = obs.to(self.device)
+        feature = self.state_encoder(obs)
+
+        return feature
+    
+    def get_frame_feature(self, obs):
+        obs = obs.to(self.device)
+        feature = self.frame_encoder(obs, True)
+
+        return feature
+    
+    def update(self, state_feature, frame_feature):
+        mse_loss = compute_mse_loss(state_feature, frame_feature)
+        cosine_loss = compute_cosine_loss(state_feature, frame_feature)
+        loss = 0.5 * mse_loss + 0.5 * cosine_loss
+
+        self.optimizer.zero_grad()
+        loss.backward()
+        self.optimizer.step()
+
+        return cosine_loss.item()
 
     def initialize(self):
         self.robots.initialize()
@@ -200,7 +270,7 @@ class Controller:
         self.pre_cube_quat = cube_quat.clone()
         self.pre_frame = self.get_frame().copy()
 
-    def _compute_action(self, obs: np.ndarray, deterministic:bool=True) -> np.ndarray:
+    def _compute_action(self, feature, deterministic:bool=True) -> np.ndarray:
         """
         Computes the action from the observation using the loaded policy.
 
@@ -211,8 +281,6 @@ class Controller:
             np.ndarray: The action.
         """
         with torch.no_grad():
-            obs = obs.float().to(self.device)
-            feature = self.encoder(obs, True)
             step = self.actor(feature, std=1.0)
             if deterministic:
                 action = step.mean
@@ -221,46 +289,15 @@ class Controller:
             action = action
         return action
     
-    def forward(self, obs, deterministic):
-        self.action = self._compute_action(obs, deterministic)
+    def forward(self, feature, deterministic):
+        self.action = self._compute_action(feature, deterministic)
         self.target_joint_pos = self.action * self._action_scale + self.robots.get_joint_positions()
         
         action = ArticulationActions(joint_positions=self.target_joint_pos)
         self.robots.apply_action(action)
 
-
-def untile_image(tiled_img, tile_rows=8, tile_cols=8, tile_h=480, tile_w=640):
-    tiles = []
-    for i in range(tile_rows):
-        for j in range(tile_cols):
-            tile = tiled_img[
-                i*tile_h:(i+1)*tile_h,
-                j*tile_w:(j+1)*tile_w,
-                :
-            ]
-            tiles.append(tile)
-
-    return tiles
-
-class Writer:
-    @staticmethod
-    def save_data(trajectory_id: str, step: int, state_obs, frame_obs, tile_rows, tile_cols):
-        pre_step = max(step, step-1)
-        state_obs = state_obs.cpu().tolist()
-        frames = untile_image(frame_obs, tile_rows, tile_cols)
-
-        for env_id in range(num_envs):
-            data = {
-                "states": state_obs[env_id],
-                "frames": [f"replays/img/{trajectory_id}_{env_id}_{step}.jpg",
-                           f"replays/img/{trajectory_id}_{env_id}_{pre_step}.jpg"]
-            }
-
-            frame = Image.fromarray(frames[env_id])
-            frame.save(f"replays/img/{trajectory_id}_{env_id}_{step}.jpg")
-
-            with open(f"replays/json/{trajectory_id}_{env_id}_{step}.json", "w") as f:
-                json.dump(data, f)
+    def save(self):
+        torch.save([self.frame_encoder.state_dict(), self.actor.state_dict()], "frame_model.pth")
 
 # preparing the scene
 assets_root_path = get_assets_root_path()
@@ -274,11 +311,9 @@ open_stage(usd_path="scene.usd")
 my_world = World(physics_dt=1/120, rendering_dt=1/120, stage_units_in_meters=1.0,
                  backend="torch", device="cuda:0")
 
-tile_rows = 2
-tile_cols = 2
+tile_rows = 8
+tile_cols = 8
 num_envs = tile_rows * tile_cols
-
-print(num_envs)
 
 cloner = GridCloner(spacing=5.0)
 
@@ -307,26 +342,32 @@ for _ in range(60):
     my_world.step(render=True)
 
 start = time.perf_counter()
-for _ in range(25):
-    trajectory_id = str(uuid4())
+for _ in range(50):
     controller.reset()
-
+    cosine_loss_buffer = []
     for _ in range(12):
         my_world.step(render=True)
     
-    for i in range(40):
+    for i in range(30):
         state_obs = controller.get_state_obs()
-        frame_obs = controller.get_frame()
+        frame_obs = controller.get_camera_obs()
 
-        #Writer.save_data(trajectory_id, i, state_obs, frame_obs, tile_rows, tile_cols)
+        state_feature = controller.get_state_feature(state_obs)
+        frame_feature = controller.get_frame_feature(frame_obs)
 
-        controller.forward(state_obs, False)
+        cosine_loss = controller.update(state_feature, frame_feature)
+        cosine_loss_buffer.append(cosine_loss)
+
+        controller.forward(state_feature, False)
 
         for _ in range(4):
             my_world.step(render=True)
 
+    print(np.mean(cosine_loss_buffer))
+
 end = time.perf_counter()
 print(f"took {end - start:.4f} seconds")
+controller.save()
 
 
 simulation_app.close()
