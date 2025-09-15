@@ -32,11 +32,10 @@ def colorize_depth(depth):
 config = RealSenseCameraConfig(
     serial_number_or_name="338522300202",
     fps=30,
-    width=640,
-    height=480,
+    width=1280,
+    height=720,
     color_mode=ColorMode.RGB,
-    use_depth=False,
-    rotation=Cv2Rotation.NO_ROTATION
+    use_depth=False
 )
 
 # Instantiate and connect a `RealSenseCamera` with warm-up read (default).
@@ -49,7 +48,7 @@ try:
     #depth_map = camera.read_depth()
     print("Color frame shape:", color_frame.shape)
     #print("Depth map shape:", depth_map.shape)
-    Image.fromarray(color_frame).save("real.png")
+    Image.fromarray(color_frame).resize((640, 360)).save("real.png")
     window_color = "RealSense Color"
     #window_depth = "RealSense Depth"
     cv2.namedWindow(window_color, cv2.WINDOW_NORMAL)

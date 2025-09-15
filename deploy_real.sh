@@ -1,1 +1,1 @@
-python deploy_real.py --robot.type=so101_follower  --robot.port=/dev/ttyACM0 --robot.id=ku_follower_arm
+python deploy_real.py --robot.type=so101_follower  --robot.port=/dev/ttyACM0 --robot.id=ku_follower_arm --robot.cameras="{left: {type: intelrealsense, serial_number_or_name: "032622072817",width: 1280, height: 720, fps: 30  }}"

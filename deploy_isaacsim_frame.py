@@ -70,7 +70,7 @@ robots = Articulation(prim_paths_expr=["/World/env_.*/so101"], name="robot")
 cubes = RigidPrim(prim_paths_expr=["/World/env_.*/Cube/Cube"], name="cube")
 color_cameras = CameraView(
     prim_paths_expr=["/World/env_.*/Realsense/RSD455/Camera_OmniVision_OV9782_Color"],
-    camera_resolution=(640, 480)
+    camera_resolution=(1280, 720)
 )
 
 lights = RandomLights(dome_light, distant_light, assets_root_path)

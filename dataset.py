@@ -2,7 +2,7 @@ import json
 import glob
 
 from PIL import Image
-
+import random
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torchvision.transforms import v2
@@ -14,9 +14,12 @@ class PairDataset(Dataset):
         self.data_path = data_path
         self.files = glob.glob(f"{data_path}/json/*.json")
 
+        self.to_over_lay = Image.open("real.png").convert("RGBA")
+
         self.transform = v2.Compose([
-            #v2.ColorJitter(brightness=0.2, hue=0.2),
             v2.ToImage(),
+            v2.ColorJitter(brightness=0.2),
+            v2.CenterCrop((360, 360)),
             v2.Resize((112, 112)),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
@@ -26,7 +29,11 @@ class PairDataset(Dataset):
         return len(self.files)
     
     def process_img(self, img_file):
-        img = Image.open(img_file)
+        img = Image.open(img_file).convert("RGBA")
+
+        alpha = 0.5
+        img = Image.blend(img, self.to_over_lay, alpha).convert("RGB")
+
         img = self.transform(img)
         return img
 

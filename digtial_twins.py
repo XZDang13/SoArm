@@ -48,9 +48,11 @@ distant_light = DistantLight(
     "/Environment/DistantLight"
 )
 
+lights = RandomLights(dome_light, distant_light, assets_root_path)
+
 color_camera = Camera(
     prim_path="/World/env_0/Realsense/RSD455/Camera_OmniVision_OV9782_Color",
-    resolution=(640, 480),
+    resolution=(1280, 720),
     frequency=120,
 )
 
@@ -73,7 +75,10 @@ keyboard_sub = input_interface.subscribe_to_keyboard_events(
     keyboard, on_key_event
 )
 
+
+lights.set_lights()
 while simulation_app.is_running():
+
     my_world.step(render=True)
 
 input_interface.unsubscribe_from_keyboard_events(keyboard, keyboard_sub)

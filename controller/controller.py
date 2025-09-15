@@ -94,7 +94,7 @@ def sample_quat(num_envs, x_range=None, y_range=None, z_range=None, device=None)
 
     return quat
 
-def untile_image(tiled_img, tile_rows=8, tile_cols=8, tile_h=480, tile_w=640):
+def untile_image(tiled_img, tile_rows=8, tile_cols=8, tile_h=720, tile_w=1280):
     tiles = []
     for i in range(tile_rows):
         for j in range(tile_cols):
@@ -103,7 +103,7 @@ def untile_image(tiled_img, tile_rows=8, tile_cols=8, tile_h=480, tile_w=640):
                 j*tile_w:(j+1)*tile_w,
                 :
             ]
-            tiles.append(Image.fromarray(tile))
+            tiles.append(Image.fromarray(tile).resize((640, 360)))
 
     return tiles
 
@@ -141,6 +141,7 @@ class Controller:
 
         self.transform = v2.Compose([
             v2.ToImage(),
+            v2.CenterCrop((360, 360)),
             v2.Resize((112, 112)),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
@@ -304,11 +305,11 @@ class RandomLights:
     def set_lights(self):
         background_asset = random.choice(self.background_assets)
         asset_path = self.assets_root_path + background_asset
-        self.dome_light.set_texture_files(texture_files=[asset_path])
+        #self.dome_light.set_texture_files(texture_files=[asset_path])
 
-        dome_light_quat = sample_quat(1, x_range=[-torch.pi, torch.pi],
-                                    y_range=[-torch.pi, torch.pi]).tolist()
-        self.dome_light.set_world_poses(orientations=dome_light_quat)
+        #dome_light_quat = sample_quat(1, x_range=[-torch.pi, torch.pi],
+        #                            y_range=[-torch.pi, torch.pi]).tolist()
+        #self.dome_light.set_world_poses(orientations=dome_light_quat)
 
         distant_light_quat = sample_quat(1, x_range=[-torch.pi, torch.pi],
                                     y_range=[-torch.pi, torch.pi]).tolist()

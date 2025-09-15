@@ -91,12 +91,12 @@ def inference(cfg: SetupConfig):
     encoder = EncoderNet(6+6+6+3+4, [256, 256, 256]).to(device)
     actor = StochasticDDPGActor(encoder.dim, [256, 256], 6).to(device)
 
-    encoder_params, actor_params, _ = torch.load("model.pth")
-    encoder.load_state_dict(encoder_params)
-    actor.load_state_dict(actor_params)
+    #encoder_params, actor_params, _ = torch.load("model.pth")
+    #encoder.load_state_dict(encoder_params)
+    #actor.load_state_dict(actor_params)
 
-    encoder.eval()
-    actor.eval()
+    #encoder.eval()
+    #actor.eval()
 
     @torch.no_grad()
     def get_action(obs):
@@ -121,11 +121,6 @@ def inference(cfg: SetupConfig):
     state = robot.get_observation()
     print(state)
 
-    current_pos = np.deg2rad(get_joint_pos(robot))
-    pre_pos = np.deg2rad(get_joint_pos(robot))
-    pre_action = np.array([0, 0, 0, 0, 0, 0])
-    goal_state = np.array([ 1.9610e-01, -1.7965e-01,  1.6200e-02,  9.4926e-01,  0.0000e+00, -2.9802e-08, -3.1448e-01])
-
     try:
         log_say("Settin to init state", cfg.play_sounds, blocking=True)
         init_state = {
@@ -141,26 +136,23 @@ def inference(cfg: SetupConfig):
         log_say("Inference", cfg.play_sounds, blocking=True)
         while True:
             loop_start = time.perf_counter()
-            obs = np.concatenate([goal_state, current_pos, pre_pos, pre_action], axis=-1)
-            action = get_action(obs)
-            target_pos_rad = current_pos + action * 0.25
-            target_pos_rad = target_pos_rad.clip(LOWER_LIMITS, UPPER_LIMITS)
-            target_pos = np.rad2deg(target_pos_rad).tolist()
+            #obs = np.concatenate([goal_state, current_pos, pre_pos, pre_action], axis=-1)
+            #action = get_action(obs)
+            #target_pos_rad = current_pos + action * 0.25
+            #target_pos_rad = target_pos_rad.clip(LOWER_LIMITS, UPPER_LIMITS)
+            #target_pos = np.rad2deg(target_pos_rad).tolist()
 
-            cmd = get_cmd(target_pos)
+            #cmd = get_cmd(target_pos)
 
-            print(target_pos_rad)
-            print(action)
-            print(cmd)
-            print("-----------------")
+            #print(target_pos_rad)
+            #print(action)
+            #print(cmd)
+            #print("-----------------")
 
-            robot.send_action(cmd)
+            #robot.send_action(cmd)
             dt_s = time.perf_counter() - loop_start
             sleep_time = 1.0 / 30 - dt_s
             busy_wait(sleep_time)
-            pre_pos = current_pos.copy()
-            current_pos = np.deg2rad(get_joint_pos(robot))
-            pre_action = action.copy()
 
     except KeyboardInterrupt:
         pass

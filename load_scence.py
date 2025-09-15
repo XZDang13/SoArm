@@ -62,8 +62,8 @@ distant_light = DistantLight(
 my_world = World(physics_dt=1/120, rendering_dt=1/120, stage_units_in_meters=1.0,
                  backend="torch", device="cuda:0")
 
-tile_rows = 10
-tile_cols = 10
+tile_rows = 5
+tile_cols = 5
 num_envs = tile_rows * tile_cols
 
 print(num_envs)
@@ -82,7 +82,7 @@ robots = Articulation(prim_paths_expr=["/World/env_.*/so101"], name="robot")
 cubes = RigidPrim(prim_paths_expr=["/World/env_.*/Cube/Cube"], name="cube")
 color_cameras = CameraView(
     prim_paths_expr=["/World/env_.*/Realsense/RSD455/Camera_OmniVision_OV9782_Color"],
-    camera_resolution=(640, 480)
+    camera_resolution=(1280, 720)
 )
 
 controller = Controller(robots, cubes, color_cameras, tile_rows, tile_cols, "state_model.pth")
@@ -98,7 +98,7 @@ for _ in range(60):
 
 
 start = time.perf_counter()
-for _ in range(30):
+for _ in range(60):
     trajectory_id = str(uuid4())
     controller.reset()
     lights.set_lights()
@@ -117,7 +117,7 @@ for _ in range(30):
         for _ in range(4):
             my_world.step(render=True)
 
-for _ in range(10):
+for _ in range(20):
     trajectory_id = str(uuid4())
     controller.reset()
     lights.set_lights()
