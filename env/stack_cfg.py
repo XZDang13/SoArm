@@ -39,7 +39,9 @@ class EventCfg:
 class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
     episode_length_s = 2.0
     
-    observation_space = 6+6+3+4+3+4
+    observation_space = 13
+    state_space = 2
+    
 
     green_cube:RigidObjectCfg = RigidObjectCfg(
         prim_path="/World/envs/env_.*/GreenCube",

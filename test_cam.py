@@ -2,7 +2,7 @@ import time
 import numpy as np
 import cv2
 from PIL import Image
-
+import math
 from lerobot.cameras.realsense.configuration_realsense import RealSenseCameraConfig
 from lerobot.cameras.realsense.camera_realsense import RealSenseCamera
 from lerobot.cameras.configs import ColorMode, Cv2Rotation
@@ -29,18 +29,46 @@ def colorize_depth(depth):
 
     return cv2.applyColorMap(d, cv2.COLORMAP_JET)
 
+width=1280
+height=800
+
 config = RealSenseCameraConfig(
     serial_number_or_name="338522300202",
     fps=30,
-    width=1280,
-    height=720,
+    width=width,
+    height=height,
     color_mode=ColorMode.RGB,
     use_depth=False
 )
 
+def intrinsics_to_dict(intr):
+    fov_x = 2 * math.degrees(math.atan(intr.width / (2 * intr.fx)))
+    fov_y = 2 * math.degrees(math.atan(intr.height / (2 * intr.fy)))
+    return {
+        "width": intr.width,
+        "height": intr.height,
+        "fx": intr.fx,
+        "fy": intr.fy,
+        "ppx": intr.ppx,
+        "ppy": intr.ppy,
+        "model": str(intr.model),
+        "coeffs": list(intr.coeffs),
+        "fov_x_deg": fov_x,
+        "fov_y_deg": fov_y,
+        "fov_diag_deg": math.degrees(
+            2 * math.atan(math.sqrt(intr.width**2 + intr.height**2) / (2 * intr.fx))
+        ),  # diagonal FOV (approx using fx)
+    }
+
 # Instantiate and connect a `RealSenseCamera` with warm-up read (default).
 camera = RealSenseCamera(config)
 camera.connect()
+
+
+sprofile = camera.rs_profile.get_streams()[0]
+vsp = sprofile.as_video_stream_profile()
+intr = vsp.get_intrinsics()
+print(intrinsics_to_dict(intr))
 
 # Capture a color frame via `read()` and a depth map via `read_depth()`.
 try:
@@ -48,7 +76,7 @@ try:
     #depth_map = camera.read_depth()
     print("Color frame shape:", color_frame.shape)
     #print("Depth map shape:", depth_map.shape)
-    Image.fromarray(color_frame).resize((640, 360)).save("real.png")
+    Image.fromarray(color_frame).save(f"real_{width}_{height}.png")
     window_color = "RealSense Color"
     #window_depth = "RealSense Depth"
     cv2.namedWindow(window_color, cv2.WINDOW_NORMAL)
@@ -89,6 +117,12 @@ try:
 
 
         # Put FPS on color image
+        h, w = color_bgr.shape[:2]
+        center = (w // 2, h // 2)
+
+        # Draw a red circle (BGR: (0,0,255))
+        cv2.circle(color_bgr, center, radius=3, color=(0, 0, 255), thickness=3)
+
         cv2.putText(color_bgr, f"FPS: {ema_fps:.1f}", (10, 30),
                     cv2.FONT_HERSHEY_SIMPLEX, 1.0, (0, 255, 0), 2, cv2.LINE_AA)
 

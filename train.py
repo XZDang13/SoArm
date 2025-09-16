@@ -49,12 +49,14 @@ class Trainer:
         self.cfg.scene.num_envs = 256
         self.env = gymnasium.make("STACK-v0", cfg=self.cfg)
 
-        self.env_nums, self.obs_dim = self.env.observation_space.shape
+        self.env_nums = self.cfg.scene.num_envs
+        self.state_dim = self.cfg.state_space
+        self.obs_dim = self.cfg.observation_space
+        self.action_dim = self.cfg.action_space
 
-        self.action_dim = self.env.action_space.shape[1]
         self.device = self.env.unwrapped.device
 
-        self.encoder = EncoderNet(self.obs_dim, [256, 256, 256]).to(self.device)
+        self.encoder = EncoderNet(self.obs_dim, [128, 128, 128]).to(self.device)
         self.actor = StochasticDDPGActor(self.encoder.dim, [256, 256], self.action_dim).to(self.device)
         self.critic = Critic(self.encoder.dim, [256, 256], self.action_dim).to(self.device)
         self.critic_target = Critic(self.encoder.dim, [256, 256], self.action_dim).to(self.device)
@@ -72,8 +74,8 @@ class Trainer:
         self.buffer_steps = 50000
         self.rollout_buffer = ReplayBuffer(self.env_nums, self.buffer_steps)
 
-        self.rollout_buffer.create_storage_space("observations", (self.obs_dim,), torch.float32)
-        self.rollout_buffer.create_storage_space("next_observations", (self.obs_dim,), torch.float32)
+        self.rollout_buffer.create_storage_space("observations", (self.state_dim, self.obs_dim), torch.float32)
+        self.rollout_buffer.create_storage_space("next_observations", (self.state_dim, self.obs_dim), torch.float32)
         self.rollout_buffer.create_storage_space("actions", (self.action_dim,), torch.float32)
         self.rollout_buffer.create_storage_space("rewards", (), torch.float32)
         self.rollout_buffer.create_storage_space("dones", (), torch.float32)

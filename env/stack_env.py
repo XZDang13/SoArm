@@ -115,14 +115,19 @@ class StackTask(DirectRLEnv):
             cube_quat_b = add_quat_noise_wxyz(cube_quat_b, max_angle=0.02)
             pre_cube_quat_b = add_quat_noise_wxyz(pre_cube_quat_b, max_angle=0.02) 
 
-        obs = torch.cat([
+        current_state = torch.cat([
             cube_pos_b,#3
             cube_quat_b,#4
-            joint_pos, #6
+            joint_pos, #6)
+        ], dim=-1)
+
+        pre_state = torch.cat([
             pre_cube_pos_b,
             pre_cube_quat_b,
             previous_joint_pos
         ], dim=-1)
+
+        obs = torch.stack([current_state, pre_state], 1)
 
         #end_effector_pos = self.end_effector.data.target_pos_source[:, 0, :]
         #end_effector_quat = self.end_effector.data.target_quat_source[:, 0, :]

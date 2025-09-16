@@ -42,7 +42,7 @@ sim_backgound = Image.open("sim.png").resize((640, 360)).convert("RGBA")
 def get_camera_obs(obs):
     camera = obs["camera"]
     img = Image.fromarray(camera).resize((640, 360)).convert("RGBA")
-    alpha = 0.5
+    alpha = 0.
     img = Image.blend(img, sim_backgound, alpha).convert("RGB")
 
     return img
@@ -210,7 +210,7 @@ def main():
             #print(cmd)
             #print("-----------------")
 
-            robot.send_action(cmd)
+            #robot.send_action(cmd)
 
             dt_s = time.perf_counter() - loop_start
             sleep_time = 1.0 / 30 - dt_s

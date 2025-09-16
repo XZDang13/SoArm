@@ -28,16 +28,17 @@ from model.actor_critic import EncoderNet, StochasticDDPGActor
 class Trainer:
     def __init__(self):
         cfg = STACK_TASK_CFG()
-        cfg.scene.num_envs = 1
+        cfg.scene.num_envs = 4
         cfg.is_training = False
         self.env = gymnasium.make("STACK-v0", cfg=cfg)
 
         self.device = self.env.unwrapped.device
-
+        self.num_envs = cfg.scene.num_envs
+        self.state_dim = cfg.state_space
         self.obs_dim = cfg.observation_space
         self.action_dim = cfg.action_space
 
-        self.encoder = EncoderNet(self.obs_dim, [256, 256, 256]).to(self.device)
+        self.encoder = EncoderNet(self.obs_dim, [128, 128, 128]).to(self.device)
         self.actor = StochasticDDPGActor(self.encoder.dim, [256, 256], self.action_dim).to(self.device)
 
         encoder_params, actor_params, _ = torch.load("state_model.pth")
@@ -63,7 +64,6 @@ class Trainer:
     
     def rollout(self):
         obs_dict, info = self.env.reset()
-
         for i in range(1000):
             action = self.get_action(obs_dict, True)
             #print(action)

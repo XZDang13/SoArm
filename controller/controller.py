@@ -122,7 +122,7 @@ class Controller:
         self.actor = None
 
         if state_encoder_path is not None:
-            self.state_encoder = EncoderNet(6+6+3+4+3+4, [256, 256, 256]).to(self.device)
+            self.state_encoder = EncoderNet(6+3+4, [128, 128, 128]).to(self.device)
             self.actor = StochasticDDPGActor(self.state_encoder.dim, [256, 256], 6).to(self.device)
 
             state_encoder_params, actor_params, _ = torch.load("state_model.pth")
@@ -166,7 +166,22 @@ class Controller:
         frame = self.cameras.get_rgb_tiled()
 
         return frame
-        
+    
+    def get_state(self):
+        cube_pos, cube_quat = self.get_cube_state()
+        joint_pos = self.robots.get_joint_positions()
+
+        cube_pos -= self.robots_position
+        cube_quat = map_to_yaw_rep(cube_quat, xyzw=False)
+
+        current_state = torch.cat([
+            cube_pos,#3
+            cube_quat,#4
+            joint_pos, #6)
+        ], dim=-1)
+
+        return current_state
+    
     def get_cube_state(self):
         cube_state = self.cubes.get_current_dynamic_state()
         cube_pos = cube_state.positions
@@ -192,7 +207,21 @@ class Controller:
         pre_cube_pos -= self.robots_position
         pre_cube_quat = map_to_yaw_rep(pre_cube_quat, xyzw=False)
 
-        return torch.cat([cube_pos, cube_quat, joint_pos, pre_cube_pos, pre_cube_quat, pre_joint_pos], dim=1)
+        current_state = torch.cat([
+            cube_pos,#3
+            cube_quat,#4
+            joint_pos, #6)
+        ], dim=-1)
+
+        pre_state = torch.cat([
+            pre_cube_pos,
+            pre_cube_quat,
+            pre_joint_pos
+        ], dim=-1)
+
+        obs = torch.stack([current_state, pre_state], 1)
+
+        return obs
     
     def process_tile_image(self, frame):
         frame = untile_image(frame, self.tile_rows, self.tile_cols)

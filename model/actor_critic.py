@@ -21,7 +21,7 @@ class EncoderNet(nn.Module):
 
             layers.append(mlp)
 
-        self.dim = dim
+        self.dim = dim * 2
         return layers
     
     def get_features(self, x:torch.Tensor) -> list[torch.Tensor]:
@@ -37,8 +37,8 @@ class EncoderNet(nn.Module):
         for layer in self.layers:
             x = layer(x)
             x = F.silu(x)
-        x = F.dropout(x, p=0.2, training=aug)
-
+        x = torch.flatten(x, 1)
+        x = F.dropout(x, p=0.25, training=aug)
         return x
     
 class RandomShiftsAug(nn.Module):

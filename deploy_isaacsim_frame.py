@@ -74,7 +74,7 @@ color_cameras = CameraView(
 )
 
 lights = RandomLights(dome_light, distant_light, assets_root_path)
-controller = Controller(robots, cubes, color_cameras, tile_rows, tile_cols, "state_model.pth", "frame_model.pth")
+controller = Controller(robots, cubes, color_cameras, tile_rows, tile_cols, "state_model.pth")
 
 my_world.reset()
 controller.initialize()
@@ -95,15 +95,15 @@ while simulation_app.is_running():
         frame_obs = controller.get_camera_obs()
 
         state_feature = controller.get_state_feature(state_obs)
-        frame_feature = controller.get_frame_feature(frame_obs)
+        #frame_feature = controller.get_frame_feature(frame_obs)
 
-        print(F.cosine_similarity(state_feature, frame_feature))
+        #print(F.cosine_similarity(state_feature, frame_feature))
 
         #frame = controller.get_frame()
         #img = Image.fromarray(frame)
         #img.save(f"imgs/{i}.png")
 
-        controller.forward(frame_feature, True)
+        controller.forward(state_feature, True)
 
         for _ in range(4):
             my_world.step(render=True)

@@ -56,6 +56,8 @@ color_camera = Camera(
     frequency=120,
 )
 
+color_camera.set_projection_type("fisheyeEquidistant")
+
 my_world.reset()
 color_camera.initialize()
 
