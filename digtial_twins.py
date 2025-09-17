@@ -52,7 +52,7 @@ lights = RandomLights(dome_light, distant_light, assets_root_path)
 
 color_camera = Camera(
     prim_path="/World/env_0/Realsense/RSD455/Camera_OmniVision_OV9782_Color",
-    resolution=(1280, 720),
+    resolution=(640, 480),
     frequency=120,
 )
 

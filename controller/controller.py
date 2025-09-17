@@ -137,7 +137,7 @@ class Controller:
             self.frame_encoder.load_state_dict(frame_encoder_params)
             self.frame_encoder.eval()
 
-        self._action_scale = 0.15
+        self._action_scale = 0.2
 
         self.transform = v2.Compose([
             v2.ToImage(),
