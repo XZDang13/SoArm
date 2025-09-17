@@ -30,7 +30,7 @@ def colorize_depth(depth):
     return cv2.applyColorMap(d, cv2.COLORMAP_JET)
 
 width=1280
-height=800
+height=720
 
 config = RealSenseCameraConfig(
     serial_number_or_name="338522300202",

@@ -51,12 +51,10 @@ distant_light = DistantLight(
 lights = RandomLights(dome_light, distant_light, assets_root_path)
 
 color_camera = Camera(
-    prim_path="/World/env_0/Realsense/RSD455/Camera_OmniVision_OV9782_Color",
-    resolution=(640, 480),
+    prim_path="/World/env_0/Camera",
+    resolution=(4032, 3024),
     frequency=120,
 )
-
-color_camera.set_projection_type("fisheyeEquidistant")
 
 my_world.reset()
 color_camera.initialize()
