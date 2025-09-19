@@ -41,18 +41,9 @@ set_camera_view(
     eye=[0.0, 2.5, 1.5], target=[0.00, 0.00, 0.00], camera_prim_path="/OmniverseKit_Persp"
 )  # set camera view
 
-dome_light = DomeLight(
-    "/Environment/DomeLight"
-)
-distant_light = DistantLight(
-    "/Environment/DistantLight"
-)
-
-lights = RandomLights(dome_light, distant_light, assets_root_path)
-
 color_camera = Camera(
-    prim_path="/World/env_0/Camera",
-    resolution=(4032, 3024),
+    prim_path="/World/env_0/iphone/Camera",
+    resolution=(640, 480),
     frequency=120,
 )
 
@@ -75,8 +66,6 @@ keyboard_sub = input_interface.subscribe_to_keyboard_events(
     keyboard, on_key_event
 )
 
-
-lights.set_lights()
 while simulation_app.is_running():
 
     my_world.step(render=True)
