@@ -8,6 +8,7 @@ import torch.nn.functional as F
 import random
 import carb
 import numpy as np
+from PIL import Image
 import torch
 from isaacsim.core.api import World
 from isaacsim.core.prims import Articulation, RigidPrim, XFormPrim
@@ -69,9 +70,11 @@ cloner.clone(
 robots = Articulation(prim_paths_expr=["/World/env_.*/so101"], name="robot")
 cubes = RigidPrim(prim_paths_expr=["/World/env_.*/Cube/Cube"], name="cube")
 color_cameras = CameraView(
-    prim_paths_expr=["/World/env_.*/Realsense/RSD455/Camera_OmniVision_OV9782_Color"],
-    camera_resolution=(1280, 720)
+    prim_paths_expr=["/World/env_.*/Camera"],
+    camera_resolution=(640, 480)
 )
+
+
 
 lights = RandomLights(dome_light, distant_light, assets_root_path)
 controller = Controller(robots, cubes, color_cameras, tile_rows, tile_cols, "state_model.pth")
@@ -79,18 +82,23 @@ controller = Controller(robots, cubes, color_cameras, tile_rows, tile_cols, "sta
 my_world.reset()
 controller.initialize()
 
+controller.random_visual()
+
 for _ in range(60):
     my_world.step(render=True)
 
 count = 0
 
 controller.reset()
-while simulation_app.is_running():
+#while simulation_app.is_running():
+for _ in range(1):
     controller.reset()
     for _ in range(12):
         my_world.step(render=True)
     
     for i in range(50):
+        lights.set_lights()
+
         state_obs = controller.get_state_obs()
         frame_obs = controller.get_camera_obs()
 
@@ -99,9 +107,9 @@ while simulation_app.is_running():
 
         #print(F.cosine_similarity(state_feature, frame_feature))
 
-        #frame = controller.get_frame()
-        #img = Image.fromarray(frame)
-        #img.save(f"imgs/{i}.png")
+        frame = controller.get_frame()
+        img = Image.fromarray(frame)
+        img.save(f"imgs/{i}.png")
 
         controller.forward(state_feature, True)
 

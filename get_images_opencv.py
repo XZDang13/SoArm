@@ -20,6 +20,8 @@ camera.connect()
 win_name = "OpenCV Camera (LeRobot)"
 cv2.namedWindow(win_name, cv2.WINDOW_NORMAL)
 
+num = 0
+
 # Read frames asynchronously in a loop via `async_read(timeout_ms)`
 try:
     while True:
@@ -47,6 +49,7 @@ try:
             break
         elif key == ord("s"):  # Save frame
             filename = f"real.png"
+            num += 1
             cv2.imwrite(filename, frame)
             print(f"Saved {filename}")
 

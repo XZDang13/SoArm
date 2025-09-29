@@ -8,6 +8,7 @@ import omni
 import torch
 from torchvision.transforms import v2
 from isaacsim.core.utils.types import ArticulationActions
+from isaacsim.core.api.materials import OmniPBR
 from PIL import Image
 
 from model.actor_critic import EncoderNet, FrameObservationEncoderNet, StochasticDDPGActor
@@ -149,6 +150,11 @@ class Controller:
 
         self.tile_rows = tile_rows
         self.tile_cols = tile_cols
+
+        self.cube_material = OmniPBR(
+            prim_path="/World/material/cube",  # path to the material prim to create
+            color=np.array([0.5, 0.0, 0.0])
+        )
 
     def set_props(self):
         # joint PD gains (use float32, shapes [num_envs, dof])
@@ -303,6 +309,11 @@ class Controller:
         action = ArticulationActions(joint_positions=self.target_joint_pos)
         self.robots.apply_action(action)
 
+    def random_visual(self):
+        self.cube_material.set_color(np.array([0., 0.0, 0.5]))
+        self.robots.apply_visual_materials(self.cube_material)
+
+
 class RandomLights:
     def __init__(self, dome_light, distant_light, assets_root_path):
         self.dome_light = dome_light
@@ -334,11 +345,12 @@ class RandomLights:
     def set_lights(self):
         background_asset = random.choice(self.background_assets)
         asset_path = self.assets_root_path + background_asset
-        #self.dome_light.set_texture_files(texture_files=[asset_path])
+        self.dome_light.set_texture_files(texture_files=[asset_path])
 
-        #dome_light_quat = sample_quat(1, x_range=[-torch.pi, torch.pi],
-        #                            y_range=[-torch.pi, torch.pi]).tolist()
-        #self.dome_light.set_world_poses(orientations=dome_light_quat)
+        dome_light_quat = sample_quat(1, x_range=[-torch.pi, torch.pi],
+                                    y_range=[-torch.pi, torch.pi]).tolist()
+        
+        self.dome_light.set_world_poses(orientations=dome_light_quat)
 
         distant_light_quat = sample_quat(1, x_range=[-torch.pi, torch.pi],
                                     y_range=[-torch.pi, torch.pi]).tolist()
