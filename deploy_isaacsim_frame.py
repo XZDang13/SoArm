@@ -22,8 +22,9 @@ from isaacsim.core.utils.rotations import euler_angles_to_quat
 from isaacsim.core.utils.types import ArticulationActions
 from isaacsim.core.cloner import GridCloner
 from isaacsim.core.experimental.objects import DomeLight, DistantLight
+from isaacsim.core.experimental.materials import OmniPbrMaterial
 
-from controller.controller import Controller, RandomLights
+from controller.controller import Controller, RandomLights, RandomMaterials
 
 first_step = True
 reset_needed = False
@@ -51,8 +52,8 @@ set_camera_view(
     eye=[0.0, 2.5, 1.5], target=[0.00, 0.00, 0.00], camera_prim_path="/OmniverseKit_Persp"
 )  # set camera view
 
-tile_rows = 1
-tile_cols = 1
+tile_rows = 2
+tile_cols = 2
 num_envs = tile_rows * tile_cols
 
 print(num_envs)
@@ -67,22 +68,38 @@ cloner.clone(
 )
 
 
-robots = Articulation(prim_paths_expr=["/World/env_.*/so101"], name="robot")
-cubes = RigidPrim(prim_paths_expr=["/World/env_.*/Cube/Cube"], name="cube")
+robots = Articulation(prim_paths_expr=["/World/env_.*/so101"], name="robot", reset_xform_properties=True)
+cubes = RigidPrim(prim_paths_expr=["/World/env_.*/Cube"], name="cube")
+tables = RigidPrim(prim_paths_expr=["/World/env_.*/Table"], name="table")
 color_cameras = CameraView(
     prim_paths_expr=["/World/env_.*/Camera"],
     camera_resolution=(640, 480)
 )
 
+robot_material_paths = [f"/World/env_{i}/so101/Looks/material_a_3d_printed" for i in range(num_envs)]
+robot_material = OmniPbrMaterial(
+    robot_material_paths
+)
 
+
+cube_material_paths = [f"/World/env_{i}/Cube/Looks/CubeColor" for i in range(num_envs)]
+cube_material = OmniPbrMaterial(
+    cube_material_paths
+)
+
+table_material_paths = [f"/World/env_{i}/Table/Looks/TableColor" for i in range(num_envs)]
+table_material = OmniPbrMaterial(
+    table_material_paths
+)
 
 lights = RandomLights(dome_light, distant_light, assets_root_path)
 controller = Controller(robots, cubes, color_cameras, tile_rows, tile_cols, "state_model.pth")
+materails = RandomMaterials(robot_material, cube_material, table_material)
 
 my_world.reset()
 controller.initialize()
 
-controller.random_visual()
+
 
 for _ in range(60):
     my_world.step(render=True)
@@ -91,12 +108,16 @@ count = 0
 
 controller.reset()
 #while simulation_app.is_running():
-for _ in range(1):
+for e in range(1):
     controller.reset()
+    controller.random_camera_state()
+    materails.apply_random_color(num_envs)
+    
+
     for _ in range(12):
         my_world.step(render=True)
     
-    for i in range(50):
+    for i in range(20):
         lights.set_lights()
 
         state_obs = controller.get_state_obs()
@@ -109,7 +130,7 @@ for _ in range(1):
 
         frame = controller.get_frame()
         img = Image.fromarray(frame)
-        img.save(f"imgs/{i}.png")
+        img.save(f"imgs/{e}_{i}.png")
 
         controller.forward(state_feature, True)
 

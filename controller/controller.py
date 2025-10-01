@@ -85,6 +85,15 @@ def sample_from_range(num_envs, range=None, device=None):
 
     return value
 
+def sample_pos(num_envs, x_range=None, y_range=None, z_range=None, device=None):
+    x = sample_from_range(num_envs, x_range, device)
+    y = sample_from_range(num_envs, y_range, device)
+    z = sample_from_range(num_envs, z_range, device)
+
+    pos = torch.stack([x, y, z], dim=-1)
+
+    return pos
+
 def sample_quat(num_envs, x_range=None, y_range=None, z_range=None, device=None):
     
     euler_x = sample_from_range(num_envs, x_range, device)
@@ -150,11 +159,6 @@ class Controller:
 
         self.tile_rows = tile_rows
         self.tile_cols = tile_cols
-
-        self.cube_material = OmniPBR(
-            prim_path="/World/material/cube",  # path to the material prim to create
-            color=np.array([0.5, 0.0, 0.0])
-        )
 
     def set_props(self):
         # joint PD gains (use float32, shapes [num_envs, dof])
@@ -270,6 +274,22 @@ class Controller:
         self.robots_position = self.robots.get_default_state().positions
         self.cameras.initialize()
 
+        camera_states = self.cameras.get_default_state()
+        self.default_camera_positions = camera_states.positions
+        self.default_camera_orientations = camera_states.orientations
+
+    def random_camera_state(self):
+        pos_offset = sample_pos(self.num_envs, x_range=[-0.01, 0.01],
+                         y_range=[-0.01, 0.01], z_range=[-0.01, 0.01],
+                         device=self.device)
+        
+        pos = self.default_camera_positions + pos_offset
+        
+        quat = sample_quat(self.num_envs, x_range=[-0.0349, 0.0349], y_range=[1.9679, 2.0378], z_range=[-0.0349, 0.0349], device=self.device)
+
+        self.cameras.set_world_poses(positions=pos, orientations=quat)
+        print(self.cameras.get_world_poses())
+
     def reset(self):
         self.robots.post_reset()
         cube_offset_x, cube_offset_y = sample_in_annular_sector(self.num_envs, 0.225, 0.325,
@@ -309,9 +329,6 @@ class Controller:
         action = ArticulationActions(joint_positions=self.target_joint_pos)
         self.robots.apply_action(action)
 
-    def random_visual(self):
-        self.cube_material.set_color(np.array([0., 0.0, 0.5]))
-        self.robots.apply_visual_materials(self.cube_material)
 
 
 class RandomLights:
@@ -355,3 +372,28 @@ class RandomLights:
         distant_light_quat = sample_quat(1, x_range=[-torch.pi, torch.pi],
                                     y_range=[-torch.pi, torch.pi]).tolist()
         self.distant_light.set_world_poses(orientations=distant_light_quat)
+
+class RandomMaterials:
+    def __init__(self, robot_material, cube_material, table_material):
+        self.robot_material = robot_material
+        self.cube_material = cube_material
+        self.table_material = table_material
+
+    def random_color(self, num_envs, red_range=[0., 1.],
+                     green_range=[0., 1.], blue_range=[0., 1.]):
+        colors = np.zeros((num_envs, 3), dtype=np.float32)
+        colors[:, 0] = np.random.uniform(red_range[0], red_range[1], size=num_envs)
+        colors[:, 1] = np.random.uniform(green_range[0], green_range[1], size=num_envs)
+        colors[:, 2] = np.random.uniform(blue_range[0], blue_range[1], size=num_envs) 
+
+        return colors
+    
+    def apply_random_color(self, num_envs):
+        robot_color = self.random_color(num_envs)
+        cube_color = self.random_color(num_envs, [0., 0.4], [0.5, 1.0], [0., 0.4])
+        table_color = self.random_color(num_envs)
+
+        self.robot_material.set_input_values("diffuse_color_constant", values=robot_color)
+        self.cube_material.set_input_values("diffuse_color_constant", values=cube_color)
+        self.table_material.set_input_values("diffuse_color_constant", values=table_color)
+        
