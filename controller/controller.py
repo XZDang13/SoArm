@@ -11,7 +11,7 @@ from isaacsim.core.utils.types import ArticulationActions
 from isaacsim.core.api.materials import OmniPBR
 from PIL import Image
 
-from model.actor_critic import EncoderNet, FrameObservationEncoderNet, StochasticDDPGActor
+from model.actor_critic import EncoderNet, MobileFrameObservationEncoderNet, StochasticDDPGActor, FrameObservationEncoderNet
 from env.utils import map_to_yaw_rep
 
 @torch.jit.script
@@ -113,7 +113,7 @@ def untile_image(tiled_img, tile_rows=8, tile_cols=8, tile_h=720, tile_w=1280):
                 j*tile_w:(j+1)*tile_w,
                 :
             ]
-            tiles.append(Image.fromarray(tile).resize((640, 360)))
+            tiles.append(Image.fromarray(tile))
 
     return tiles
 
@@ -142,7 +142,7 @@ class Controller:
             self.actor.eval()
 
         if frame_encoder_path is not None:
-            self.frame_encoder = FrameObservationEncoderNet(6, 256).to(self.device)
+            self.frame_encoder = FrameObservationEncoderNet(128).to(self.device)
             frame_encoder_params, _, _ = torch.load("frame_model.pth")
             self.frame_encoder.load_state_dict(frame_encoder_params)
             self.frame_encoder.eval()
@@ -151,8 +151,7 @@ class Controller:
 
         self.transform = v2.Compose([
             v2.ToImage(),
-            v2.CenterCrop((360, 360)),
-            v2.Resize((112, 112)),
+            v2.Resize((224, 224)),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ])
@@ -248,7 +247,7 @@ class Controller:
         frame = self.process_tile_image(frame)
         pre_frame = self.process_tile_image(pre_frame)
 
-        return torch.cat([frame, pre_frame], dim=1)
+        return torch.concat([frame, pre_frame], dim=0)
     
     def get_state_feature(self, obs):
         if self.state_encoder is None:
@@ -265,6 +264,7 @@ class Controller:
         
         obs = obs.to(self.device)
         feature = self.frame_encoder(obs, True)
+        feature = feature.view(-1, 256)
 
         return feature
 
@@ -277,6 +277,7 @@ class Controller:
         camera_states = self.cameras.get_default_state()
         self.default_camera_positions = camera_states.positions
         self.default_camera_orientations = camera_states.orientations
+        #print(self.default_camera_orientations)
 
     def random_camera_state(self):
         pos_offset = sample_pos(self.num_envs, x_range=[-0.01, 0.01],
@@ -285,10 +286,9 @@ class Controller:
         
         pos = self.default_camera_positions + pos_offset
         
-        quat = sample_quat(self.num_envs, x_range=[-0.0349, 0.0349], y_range=[1.9679, 2.0378], z_range=[-0.0349, 0.0349], device=self.device)
+        quat = sample_quat(self.num_envs, x_range=[-0.0349, 0.0349], y_range=[1.5359, 1.6057], z_range=[-0.0349, 0.0349], device=self.device)
 
         self.cameras.set_world_poses(positions=pos, orientations=quat)
-        print(self.cameras.get_world_poses())
 
     def reset(self):
         self.robots.post_reset()

@@ -19,8 +19,8 @@ from lerobot.utils.utils import (
     log_say,
 )
 
-from lerobot.cameras.realsense.configuration_realsense import RealSenseCameraConfig
-from lerobot.cameras.realsense.camera_realsense import RealSenseCamera
+from lerobot.cameras.opencv.configuration_opencv import OpenCVCameraConfig
+from lerobot.cameras.opencv.camera_opencv import OpenCVCamera
 from lerobot.robots.so101_follower.config_so101_follower import SO101FollowerConfig
 from lerobot.robots.so101_follower.so101_follower import SO101Follower
 from lerobot.utils.utils import log_say
@@ -30,7 +30,7 @@ import numpy as np
 import torch
 from torchvision.transforms import v2
 from PIL import Image
-from model.actor_critic import FrameObservationEncoderNet, StochasticDDPGActor
+from model.actor_critic import MobileFrameObservationEncoderNet, StochasticDDPGActor, FrameObservationEncoderNet
 from RLAlg.nn.steps import DeterministicContinuousPolicyStep
 
 
@@ -41,9 +41,9 @@ sim_backgound = Image.open("sim.png").resize((640, 360)).convert("RGBA")
 
 def get_camera_obs(obs):
     camera = obs["camera"]
-    img = Image.fromarray(camera).resize((640, 360)).convert("RGBA")
-    alpha = 0.
-    img = Image.blend(img, sim_backgound, alpha).convert("RGB")
+    img = Image.fromarray(camera)
+    #alpha = 0.
+    #img = Image.blend(img, sim_backgound, alpha).convert("RGB")
 
     return img
 
@@ -101,8 +101,8 @@ class PolicyController:
     def __init__(self):
         self.device = torch.device("cuda:0")
 
-        self.frame_encoder = FrameObservationEncoderNet(6, 256).to(self.device)
-        self.actor = StochasticDDPGActor(self.frame_encoder.dim, [256, 256], 6).to(self.device)
+        self.frame_encoder = FrameObservationEncoderNet(128).to(self.device)
+        self.actor = StochasticDDPGActor(256, [256, 256], 6).to(self.device)
 
         frame_encoder_params, actor_params, _ = torch.load("frame_model.pth")
         self.frame_encoder.load_state_dict(frame_encoder_params)
@@ -114,8 +114,7 @@ class PolicyController:
 
         self.transform = v2.Compose([
             v2.ToImage(),
-            v2.CenterCrop((360, 360)),
-            v2.Resize((112, 112)),
+            v2.Resize((224, 224)),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ])
@@ -126,16 +125,17 @@ class PolicyController:
 
     def compute_features(self, frame):
         pre_frame = self.pre_frame.copy()
-        self.pre_frame = frame.copy()
+        
         frames = [frame, pre_frame]
 
-        frames = torch.concat(self.transform(frames)).unsqueeze(0).to(self.device)
+        frames = torch.stack(self.transform(frames), dim=0).to(self.device)
 
         features = self.frame_encoder(frames, True)
+        features = features.view(-1, 256)
 
+        self.pre_frame = frame.copy()
 
-        pre_frame.save(f"imgs/{self.count}_pre.png")
-        frame.save(f"imgs/{self.count}_cur.png")
+        frame.save(f"imgs/{self.count}.png")
         self.count += 1
 
         return features
@@ -154,15 +154,15 @@ class PolicyController:
 
 
 def main():
-    camera = RealSenseCamera(
-        RealSenseCameraConfig(
-                    serial_number_or_name="338522300202",
-                    fps=30,
-                    width=1280,
-                    height=720,
-                    color_mode=ColorMode.RGB,
-                    use_depth=False
-                )
+    camera = OpenCVCamera(
+        OpenCVCameraConfig(
+            index_or_path="/dev/video0",
+            fps=30,
+            width=640,
+            height=480,
+            color_mode=ColorMode.RGB,
+            rotation=Cv2Rotation.NO_ROTATION
+        )
     )
 
     robot_config = SO101FollowerConfig(
@@ -203,14 +203,14 @@ def main():
             target_pos = np.rad2deg(target_pos_rad).tolist()
 
             cmd = get_cmd(target_pos)
-            print(joint_pos)
-            print(target_pos)
-            print("------------")
+            #print(joint_pos)
+            #print(target_pos)
+            #print("------------")
             #print(action)
             #print(cmd)
             #print("-----------------")
 
-            #robot.send_action(cmd)
+            robot.send_action(cmd)
 
             dt_s = time.perf_counter() - loop_start
             sleep_time = 1.0 / 30 - dt_s

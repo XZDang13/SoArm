@@ -75,21 +75,21 @@ class RandomShiftsAug(nn.Module):
                              align_corners=False)
 
 class FrameObservationEncoderNet(nn.Module):
-    def __init__(self, in_channel:int, feature_dim:int):
+    def __init__(self,feature_dim:int):
         super().__init__()
         self.aug = RandomShiftsAug(4)
         
         self.dim = feature_dim
 
         self.cnn_layers = nn.Sequential(
-            Conv2DLayer(in_channel, 64, 3, 2, 1, F.silu, True),
+            Conv2DLayer(3, 64, 3, 2, 1, F.silu, True),
             Conv2DLayer(64, 128, 3, 2, 1, F.silu, True),
             Conv2DLayer(128, 256, 3, 2, 1, F.silu, True),
             Conv2DLayer(256, 512, 3, 2, 1, F.silu, True)
         )
         
         self.mlp_layer = nn.Sequential(
-            MLPLayer(512*7*7, feature_dim, nn.Identity(), True),
+            MLPLayer(512*14*14, feature_dim, nn.Identity(), True),
             #MLPLayer(1024, feature_dim, F.silu, True),
         )
         
@@ -105,28 +105,20 @@ class FrameObservationEncoderNet(nn.Module):
         return x
     
 class MobileFrameObservationEncoderNet(nn.Module):
-    def __init__(self, in_channel:int, feature_dim:int):
+    def __init__(self, feature_dim:int):
         super().__init__()
-        self.aug = RandomShiftsAug(4)
 
         self.dim = feature_dim
         
-        self.cnn_layers = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v3_large', pretrained=True)
-        self.cnn_layers.features[0][0].weight.data = self.cnn_layers.features[0][0].weight.data.repeat(1, 2, 1, 1) / 2
-        self.cnn_layers.classifier = nn.Identity()
-        
+        self.visual_encoder = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v3_large', pretrained=True)
+        self.visual_encoder.classifier = nn.Identity()
         self.mlp_layer = nn.Sequential(
             MLPLayer(960, feature_dim, nn.Identity(), True),
-            #MLPLayer(1024, feature_dim, F.silu, True),
         )
         
     def forward(self, x:torch.Tensor, with_act_func:bool=True, aug:bool=False) -> torch.Tensor:
-        if aug:
-            x = self.aug(x)
 
-        x = self.cnn_layers(x)
-        #x = F.avg_pool2d(x, 7)
-        x = x.flatten(1)
+        x = self.visual_encoder(x)
         x = self.mlp_layer(x)
         if with_act_func:
             x = F.silu(x)

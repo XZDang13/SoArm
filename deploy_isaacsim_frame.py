@@ -52,8 +52,8 @@ set_camera_view(
     eye=[0.0, 2.5, 1.5], target=[0.00, 0.00, 0.00], camera_prim_path="/OmniverseKit_Persp"
 )  # set camera view
 
-tile_rows = 2
-tile_cols = 2
+tile_rows = 1
+tile_cols = 1
 num_envs = tile_rows * tile_cols
 
 print(num_envs)
@@ -93,7 +93,7 @@ table_material = OmniPbrMaterial(
 )
 
 lights = RandomLights(dome_light, distant_light, assets_root_path)
-controller = Controller(robots, cubes, color_cameras, tile_rows, tile_cols, "state_model.pth")
+controller = Controller(robots, cubes, color_cameras, tile_rows, tile_cols, "state_model.pth", "frame_model.pth")
 materails = RandomMaterials(robot_material, cube_material, table_material)
 
 my_world.reset()
@@ -106,33 +106,42 @@ for _ in range(60):
 
 count = 0
 
+pre_init_state_feature = None
+pre_init_frame_feature = None
+
 controller.reset()
-#while simulation_app.is_running():
-for e in range(1):
+while simulation_app.is_running():
+#for e in range(1):
     controller.reset()
-    controller.random_camera_state()
-    materails.apply_random_color(num_envs)
+    #controller.random_camera_state()
+    #materails.apply_random_color(num_envs)
     
 
     for _ in range(12):
         my_world.step(render=True)
     
     for i in range(20):
-        lights.set_lights()
+        #lights.set_lights()
 
         state_obs = controller.get_state_obs()
         frame_obs = controller.get_camera_obs()
 
         state_feature = controller.get_state_feature(state_obs)
-        #frame_feature = controller.get_frame_feature(frame_obs)
+        frame_feature = controller.get_frame_feature(frame_obs)
+
+        if i == 0:
+            if pre_init_state_feature is not None:
+                print(F.cosine_similarity(state_feature, pre_init_state_feature))
+                print(F.cosine_similarity(frame_feature, pre_init_frame_feature))
+                print("------------")
+                
+            pre_init_state_feature = state_feature
+            pre_init_frame_feature = frame_feature
 
         #print(F.cosine_similarity(state_feature, frame_feature))
 
-        frame = controller.get_frame()
-        img = Image.fromarray(frame)
-        img.save(f"imgs/{e}_{i}.png")
 
-        controller.forward(state_feature, True)
+        controller.forward(frame_feature, True)
 
         for _ in range(4):
             my_world.step(render=True)

@@ -15,140 +15,134 @@ simulation_app = SimulationApp({"headless": True})  # start the simulation app, 
 
 import sys
 
-from tqdm import trange
-import time
+from uuid import uuid4
+
+import torch.nn.functional as F
+import random
 import carb
 import numpy as np
+from PIL import Image
+import torch
 from isaacsim.core.api import World
-from isaacsim.core.prims import SingleArticulation, SingleRigidPrim, SingleXFormPrim
-from isaacsim.core.utils.stage import add_reference_to_stage, get_stage_units
+from isaacsim.core.prims import Articulation, RigidPrim, XFormPrim
+from isaacsim.core.utils.stage import open_stage
 from isaacsim.core.utils.prims import get_prim_at_path
 from isaacsim.core.utils.types import ArticulationAction
 from isaacsim.core.utils.viewports import set_camera_view
 from isaacsim.storage.native import get_assets_root_path
-from omni.isaac.sensor import Camera
+from omni.isaac.sensor import CameraView
+from isaacsim.core.utils.rotations import euler_angles_to_quat
+from isaacsim.core.utils.types import ArticulationActions
+from isaacsim.core.cloner import GridCloner
 from isaacsim.core.experimental.objects import DomeLight, DistantLight
+from isaacsim.core.experimental.materials import OmniPbrMaterial
 
-from writer import Writer
+from controller.controller import Controller, RandomLights, RandomMaterials
+from controller.writer import Writer
 
-from controller.state_policy_controller import StatePolicyController
-
-first_step = True
-reset_needed = False
-
-
-
-# preparing the scene
 assets_root_path = get_assets_root_path()
 if assets_root_path is None:
     carb.log_error("Could not find Isaac Sim assets folder")
     simulation_app.close()
     sys.exit()
+    
+open_stage(usd_path="scene.usd")
 
-my_world = World(physics_dt=1/120, rendering_dt=1/120, stage_units_in_meters=1.0)
-my_world.scene.add_default_ground_plane()  # add ground plane
+dome_light = DomeLight(
+    "/Environment/DomeLight"
+)
+distant_light = DistantLight(
+    "/Environment/DistantLight"
+)
+
+my_world = World(physics_dt=1/120, rendering_dt=1/120, stage_units_in_meters=1.0,
+                 backend="torch", device="cuda:0")
+
 set_camera_view(
     eye=[0.0, 2.5, 1.5], target=[0.00, 0.00, 0.00], camera_prim_path="/OmniverseKit_Persp"
 )  # set camera view
 
-distant = DistantLight(
-    paths="/World/DistantLight"
-)
+tile_rows = 5
+tile_cols = 5
+num_envs = tile_rows * tile_cols
 
-distant_light = distant.lights[0]
-distant_light.CreateIntensityAttr(6500.0)
+img_width = 640
+img_height = 480
 
-table_xform_prim_path = "/World/TableXform"
-table_rigidbody_prim_path = "/World/TableXform/Table"
-table_usd_path = "env/assets/so101/Table.usd"
+print(num_envs)
 
-table_xform_name = "table_xform"
-table_rigidbody_name = "table_rigidbody"
-table_position = np.array([0.72, 0.0, 0.4])
-table_orientation = np.array([1.0, 0.0, 0.0, 0.0])
+cloner = GridCloner(spacing=5.0)
 
-add_reference_to_stage(table_usd_path, table_xform_prim_path)
-
-table_xform = SingleXFormPrim(prim_path=table_xform_prim_path, name=table_xform_name)
-
-table = SingleRigidPrim(
-    prim_path=table_rigidbody_prim_path, name=table_rigidbody_name, position=table_position, orientation=table_orientation
-)
-
-camera_asset_path = assets_root_path + "/Isaac/Sensors/Intel/RealSense/rsd455.usd"
-camera_xform_prim_path = "/World/Camera"
-camera_xform_name = "RSD455_xform"
-camera_rigid_prim_path = "/World/Camera/RSD455"
-camera_rigid_name = "RSD455_rigid"
-
-add_reference_to_stage(camera_asset_path, camera_xform_prim_path)
-
-camera_xform = SingleXFormPrim(prim_path=camera_xform_prim_path, name=camera_xform_name)
-camera_rigidbody = SingleRigidPrim(
-    prim_path=camera_rigid_prim_path, name=camera_rigid_name,
-    position=np.array([0.5, -0.5, 0.875]), orientation=np.array([0.9238795, 0.0, 0.0, -0.3826834])
-)
-
-camera_rigidbody.disable_rigid_body_physics()
-
-color_camera = Camera(
-    prim_path="/World/Camera/RSD455/Camera_OmniVision_OV9782_Color",
-    resolution=(640, 480),
-    frequency=30,
+clone_paths = cloner.generate_paths("/World/env", num_envs)
+cloner.clone(
+    source_prim_path="/World/env_0",
+    prim_paths=clone_paths,
+    copy_from_source=True,
 )
 
 
-cube_xform_prim_path = "/World/GreenCube"
-cube_rigidbody_prim_path = "/World/GreenCube/Cube"
-cube_usd_path = "env/assets/so101/Cube.usd"
-
-cube_xform_name = "cube_xform"
-cube_rigidbody_name = "cube_rigidbody"
-cube_position = np.array([0.27, 0.0, 0.8177])
-cube_orientation = np.array([1.0, 0.0, 0.0, 0.0])
-
-add_reference_to_stage(cube_usd_path, cube_xform_prim_path)
-
-cube_xform = SingleXFormPrim(prim_path=cube_xform_prim_path, name=cube_xform_name)
-
-cube = SingleRigidPrim(
-    prim_path=cube_rigidbody_prim_path, name=cube_rigidbody_name, position=cube_position, orientation=cube_orientation
+robots = Articulation(prim_paths_expr=["/World/env_.*/so101"], name="robot", reset_xform_properties=True)
+cubes = RigidPrim(prim_paths_expr=["/World/env_.*/Cube"], name="cube")
+tables = RigidPrim(prim_paths_expr=["/World/env_.*/Table"], name="table")
+color_cameras = CameraView(
+    prim_paths_expr=["/World/env_.*/Camera"],
+    camera_resolution=(img_width, img_height)
 )
 
-asset_path = "env/assets/so101/so101.usd"
-add_reference_to_stage(usd_path=asset_path, prim_path="/World/Robot")  # add robot to stage
-robot = SingleArticulation(prim_path="/World/Robot", name="robot",
-                           position=np.array([0.0, 0.0, 0.8]))
-
-robot.set_default_state(position=np.array([0.0, 0.0, 0.8]))
-
-contorller = StatePolicyController(
-    robot, cube, color_camera
+robot_material_paths = [f"/World/env_{i}/so101/Looks/material_a_3d_printed" for i in range(num_envs)]
+robot_material = OmniPbrMaterial(
+    robot_material_paths
 )
+
+
+cube_material_paths = [f"/World/env_{i}/Cube/Looks/CubeColor" for i in range(num_envs)]
+cube_material = OmniPbrMaterial(
+    cube_material_paths
+)
+
+table_material_paths = [f"/World/env_{i}/Table/Looks/TableColor" for i in range(num_envs)]
+table_material = OmniPbrMaterial(
+    table_material_paths
+)
+
+lights = RandomLights(dome_light, distant_light, assets_root_path)
+controller = Controller(robots, cubes, color_cameras, tile_rows, tile_cols, "state_model.pth")
+materails = RandomMaterials(robot_material, cube_material, table_material)
 
 my_world.reset()
-contorller.initialize()
-robot.post_reset()
+controller.initialize()
 
-for _ in range(120):
+for _ in range(60):
     my_world.step(render=True)
 
-start = time.perf_counter()
-for i in trange(1000):
-    contorller.post_reset()
-    for _ in range(4):
-        my_world.step(render=False)
+controller.reset()
+#while simulation_app.is_running():
+for _ in range(200):
+    controller.reset()
+    controller.random_camera_state()
+    
+    trajectory_id = str(uuid4())
 
-    for _ in range(25):
-        state_obs = contorller.get_state_obs()
-        frame_obs = contorller.get_camera_obs()
-        Writer.save_obs(state_obs, frame_obs)
-        contorller.forward(state_obs, False)
+    for _ in range(12):
+        my_world.step(render=True)
+    
+    for i in range(25):
+        lights.set_lights()
+        materails.apply_random_color(num_envs)
+
+        current_states = controller.get_state()
+        current_frames = controller.get_frame()
+
+        Writer.save_data(trajectory_id, i, current_states, current_frames, tile_rows, tile_cols, img_width, img_height)
+
+        state_obs = controller.get_state_obs()
+        state_feature = controller.get_state_feature(state_obs)
+
+        controller.forward(state_feature, False)
+
         for _ in range(4):
             my_world.step(render=True)
 
-    if i % 100 == 0:
-        end = time.perf_counter()
-        print(f"{i} took {end - start:.4f} seconds")
+    
 
 simulation_app.close()
