@@ -122,26 +122,17 @@ while simulation_app.is_running():
     
     for i in range(20):
         #lights.set_lights()
-
+        if i <= 3:
+            print(cubes.get_velocities())
         state_obs = controller.get_state_obs()
         frame_obs = controller.get_camera_obs()
 
         state_feature = controller.get_state_feature(state_obs)
         frame_feature = controller.get_frame_feature(frame_obs)
 
-        if i == 0:
-            if pre_init_state_feature is not None:
-                print(F.cosine_similarity(state_feature, pre_init_state_feature))
-                print(F.cosine_similarity(frame_feature, pre_init_frame_feature))
-                print("------------")
-                
-            pre_init_state_feature = state_feature
-            pre_init_frame_feature = frame_feature
-
         #print(F.cosine_similarity(state_feature, frame_feature))
 
-
-        controller.forward(frame_feature, True)
+        controller.forward(state_feature, True)
 
         for _ in range(4):
             my_world.step(render=True)

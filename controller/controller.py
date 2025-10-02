@@ -297,6 +297,7 @@ class Controller:
         cube_pos = self.robots_position.clone()
         cube_pos[:, 0] += cube_offset_x
         cube_pos[:, 1] += cube_offset_y
+        cube_pos[:, 2] += 0.01
 
         cube_quat = sample_quat(self.num_envs, z_range=[-torch.pi/4, torch.pi/4], device=self.device)
 

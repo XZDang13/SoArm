@@ -117,7 +117,7 @@ for _ in range(60):
 
 controller.reset()
 #while simulation_app.is_running():
-for _ in range(200):
+for e in range(100):
     controller.reset()
     controller.random_camera_state()
     
@@ -126,7 +126,7 @@ for _ in range(200):
     for _ in range(12):
         my_world.step(render=True)
     
-    for i in range(25):
+    for i in range(20):
         lights.set_lights()
         materails.apply_random_color(num_envs)
 
@@ -138,11 +138,14 @@ for _ in range(200):
         state_obs = controller.get_state_obs()
         state_feature = controller.get_state_feature(state_obs)
 
-        controller.forward(state_feature, False)
+        deterministic = (i >= 70)
+
+        controller.forward(state_feature, deterministic)
 
         for _ in range(4):
             my_world.step(render=True)
 
-    
+    if e % 10 == 0:
+        print(f"Finish {e} episodes")
 
 simulation_app.close()
