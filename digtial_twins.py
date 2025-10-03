@@ -7,20 +7,14 @@ import sys
 import carb
 import numpy as np
 from isaacsim.core.api import World
-from isaacsim.core.prims import SingleArticulation, SingleRigidPrim, SingleXFormPrim
-from isaacsim.core.utils.stage import add_reference_to_stage, get_stage_units
-from isaacsim.core.utils.prims import get_prim_at_path
-from isaacsim.core.utils.types import ArticulationAction
+from isaacsim.core.prims import Articulation, RigidPrim, XFormPrim
+from isaacsim.core.utils.types import ArticulationActions
 from isaacsim.core.utils.viewports import set_camera_view
 from isaacsim.storage.native import get_assets_root_path
 from omni.isaac.sensor import Camera
-from isaacsim.core.experimental.objects import DomeLight, DistantLight
 from isaacsim.core.utils.stage import open_stage
-from omni.kit.app import get_app_interface
 import omni.appwindow
-from isaacsim.core.experimental.objects import DomeLight
 
-from controller.controller import RandomLights
 from PIL import Image
 
 width, height = 640, 480
@@ -29,6 +23,7 @@ camera_matrix = [[626.07628932, 0.00000000e+00, 317.9777863],
                  [0.00000000e+00, 0.00000000e+00, 1.00000000e+00]]
 distortion_coefficients = [2.13396756e-01, -6.35715523e-01, -1.10409410e-03, -5.67505690e-05, 6.25051766e-01]
 
+count = 0
 
 pixel_size = 3
 
@@ -45,10 +40,13 @@ if assets_root_path is None:
 open_stage(usd_path="scene.usd")
 
 my_world = World(physics_dt=1/120, rendering_dt=1/120, stage_units_in_meters=1.0)
-my_world.scene.add_default_ground_plane()  # add ground plane
 set_camera_view(
     eye=[0.0, 2.5, 1.5], target=[0.00, 0.00, 0.00], camera_prim_path="/OmniverseKit_Persp"
 )  # set camera view
+
+robots = Articulation(prim_paths_expr=["/World/env_.*/so101"], name="robot", reset_xform_properties=True)
+cubes = RigidPrim(prim_paths_expr=["/World/env_.*/Cube"], name="cube")
+tables = RigidPrim(prim_paths_expr=["/World/env_.*/Table"], name="table")
 
 color_camera = Camera(
     prim_path="/World/env_0/Camera",
@@ -72,6 +70,7 @@ color_camera.set_opencv_pinhole_properties(cx=cx, cy=cy, fx=fx, fy=fy, pinhole=d
 #color_camera.set_vertical_aperture(0.2453, False)
 
 my_world.reset()
+robots.initialize()
 color_camera.initialize()
 
 
@@ -89,16 +88,25 @@ keyboard = app_window.get_keyboard()
 def on_key_event(event, *args, **kwargs):
     if event.type == carb.input.KeyboardEventType.KEY_PRESS:
         if event.input == carb.input.KeyboardInput.R:
+            joint_pos = robots.get_joint_positions()
+            print(np.rad2deg(joint_pos))
+            print(joint_pos)
             frame = color_camera.get_rgb()
             img = Image.fromarray(frame)
-            img.save("sim.png")
+            img.save(f"sim.png")
+            #img.save(f"debug_data/sim_{count}.png")
+            #count += 1
 
 keyboard_sub = input_interface.subscribe_to_keyboard_events(
     keyboard, on_key_event
 )
 
-while simulation_app.is_running():
+action = ArticulationActions(joint_positions=np.array([[-0.0069046,   0.00383589,  0.03145429,  1.56427532, -0.00920613,  0.01116118]]))
 
+
+while simulation_app.is_running():
+    
+    robots.apply_action(action)
     my_world.step(render=True)
 
 input_interface.unsubscribe_from_keyboard_events(keyboard, keyboard_sub)

@@ -89,7 +89,7 @@ class FrameObservationEncoderNet(nn.Module):
         )
         
         self.mlp_layer = nn.Sequential(
-            MLPLayer(512*14*14, feature_dim, nn.Identity(), True),
+            MLPLayer(512*7*7, feature_dim, nn.Identity(), True),
             #MLPLayer(1024, feature_dim, F.silu, True),
         )
         

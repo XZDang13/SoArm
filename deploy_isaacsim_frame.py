@@ -99,8 +99,6 @@ materails = RandomMaterials(robot_material, cube_material, table_material)
 my_world.reset()
 controller.initialize()
 
-
-
 for _ in range(60):
     my_world.step(render=True)
 
@@ -121,18 +119,15 @@ while simulation_app.is_running():
         my_world.step(render=True)
     
     for i in range(20):
-        #lights.set_lights()
-        if i <= 3:
-            print(cubes.get_velocities())
         state_obs = controller.get_state_obs()
         frame_obs = controller.get_camera_obs()
 
         state_feature = controller.get_state_feature(state_obs)
         frame_feature = controller.get_frame_feature(frame_obs)
 
-        #print(F.cosine_similarity(state_feature, frame_feature))
+        print(F.cosine_similarity(state_feature, frame_feature))
 
-        controller.forward(state_feature, True)
+        controller.forward(frame_feature, True)
 
         for _ in range(4):
             my_world.step(render=True)

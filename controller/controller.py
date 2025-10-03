@@ -8,6 +8,7 @@ import omni
 import torch
 from torchvision.transforms import v2
 from isaacsim.core.utils.types import ArticulationActions
+from isaacsim.core.utils.rotations import quat_to_euler_angles
 from isaacsim.core.api.materials import OmniPBR
 from PIL import Image
 
@@ -151,7 +152,7 @@ class Controller:
 
         self.transform = v2.Compose([
             v2.ToImage(),
-            v2.Resize((224, 224)),
+            v2.Resize((112, 112)),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ])
@@ -277,7 +278,9 @@ class Controller:
         camera_states = self.cameras.get_default_state()
         self.default_camera_positions = camera_states.positions
         self.default_camera_orientations = camera_states.orientations
-        #print(self.default_camera_orientations)
+        print(self.default_camera_orientations)
+        print(quat_to_euler_angles(self.default_camera_orientations[0].numpy()))
+        
 
     def random_camera_state(self):
         pos_offset = sample_pos(self.num_envs, x_range=[-0.01, 0.01],

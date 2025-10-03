@@ -110,11 +110,11 @@ class PolicyController:
         self.frame_encoder.eval()
         self.actor.eval()
 
-        self._action_scale = 0.15
+        self._action_scale = 0.2
 
         self.transform = v2.Compose([
             v2.ToImage(),
-            v2.Resize((224, 224)),
+            v2.Resize((112, 112)),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ])
@@ -166,7 +166,7 @@ def main():
     )
 
     robot_config = SO101FollowerConfig(
-        port="/dev/ttyACM0", id="ku_follower_arm"
+        port="/dev/ttyACM0", id="my_follower_arm"
     )
 
     robot = SO101Follower(robot_config)

@@ -117,7 +117,7 @@ for _ in range(60):
 
 controller.reset()
 #while simulation_app.is_running():
-for e in range(100):
+for e in range(200):
     controller.reset()
     controller.random_camera_state()
     
@@ -126,7 +126,7 @@ for e in range(100):
     for _ in range(12):
         my_world.step(render=True)
     
-    for i in range(20):
+    for i in range(25):
         lights.set_lights()
         materails.apply_random_color(num_envs)
 
