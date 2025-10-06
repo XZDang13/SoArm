@@ -37,7 +37,6 @@ from RLAlg.nn.steps import DeterministicContinuousPolicyStep
 LOWER_LIMITS = np.array([-1.91986218, -1.74532925, -1.69, -1.65806285, -2.7438473,  -0.17453298])
 UPPER_LIMITS = np.array([1.91986218, 1.74532925, 1.69, 1.65806273, 2.84120631, 1.7453292])
 
-sim_backgound = Image.open("sim.png").resize((640, 360)).convert("RGBA")
 
 def get_camera_obs(obs):
     camera = obs["camera"]

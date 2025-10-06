@@ -17,6 +17,8 @@ import omni.appwindow
 
 from PIL import Image
 
+from controller.controller import quat_from_euler_xyz
+
 width, height = 640, 480
 camera_matrix = [[626.07628932, 0.00000000e+00, 317.9777863],
                  [0.00000000e+00, 626.10882087, 241.71883685],
@@ -84,7 +86,7 @@ input_interface = carb.input.acquire_input_interface()
 app_window = omni.appwindow.get_default_app_window()
 
 keyboard = app_window.get_keyboard()
-
+count = 0
 def on_key_event(event, *args, **kwargs):
     if event.type == carb.input.KeyboardEventType.KEY_PRESS:
         if event.input == carb.input.KeyboardInput.R:
@@ -93,16 +95,14 @@ def on_key_event(event, *args, **kwargs):
             print(joint_pos)
             frame = color_camera.get_rgb()
             img = Image.fromarray(frame)
-            img.save(f"sim.png")
-            #img.save(f"debug_data/sim_{count}.png")
-            #count += 1
+            #img.save(f"sim.png")
+            img.save(f"debug_data/sim_0.png")
 
 keyboard_sub = input_interface.subscribe_to_keyboard_events(
     keyboard, on_key_event
 )
 
-action = ArticulationActions(joint_positions=np.array([[-0.0069046,   0.00383589,  0.03145429,  1.56427532, -0.00920613,  0.01116118]]))
-
+action = ArticulationActions(joint_positions=np.array([[0.42118055, 0.29843212, 0.18949289, 1.56274096, 0.79019302, 0.35297226]]))
 
 while simulation_app.is_running():
     

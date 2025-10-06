@@ -113,12 +113,12 @@ def main():
     try:
         log_say("Start", True, blocking=True)
         init_state = {
-            'shoulder_pan.pos': 0.0,
-            'shoulder_lift.pos': 0.0,
-            'elbow_flex.pos': 0.0,
+            'shoulder_pan.pos': 24.0,
+            'shoulder_lift.pos': 15.0,
+            'elbow_flex.pos': 11.0,
             'wrist_flex.pos': 90.0,
-            'wrist_roll.pos': 0.0,
-            'gripper.pos': 0.0
+            'wrist_roll.pos': 45.0,
+            'gripper.pos': 20.0
         }
 
         move_to_state(robot, init_state)

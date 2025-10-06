@@ -116,8 +116,9 @@ for _ in range(60):
     my_world.step(render=True)
 
 controller.reset()
+epoch = 100
 #while simulation_app.is_running():
-for e in range(200):
+for e in range(epoch):
     controller.reset()
     controller.random_camera_state()
     
@@ -126,7 +127,7 @@ for e in range(200):
     for _ in range(12):
         my_world.step(render=True)
     
-    for i in range(25):
+    for i in range(30):
         lights.set_lights()
         materails.apply_random_color(num_envs)
 
@@ -138,14 +139,14 @@ for e in range(200):
         state_obs = controller.get_state_obs()
         state_feature = controller.get_state_feature(state_obs)
 
-        deterministic = (i >= 70)
+        deterministic = (e >= (0.75*epoch) )
 
         controller.forward(state_feature, deterministic)
 
         for _ in range(4):
             my_world.step(render=True)
 
-    if e % 10 == 0:
-        print(f"Finish {e} episodes")
+    if (e+1) % 10 == 0:
+        print(f"Finish {e+1} episodes")
 
 simulation_app.close()

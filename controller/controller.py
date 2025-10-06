@@ -278,9 +278,6 @@ class Controller:
         camera_states = self.cameras.get_default_state()
         self.default_camera_positions = camera_states.positions
         self.default_camera_orientations = camera_states.orientations
-        print(self.default_camera_orientations)
-        print(quat_to_euler_angles(self.default_camera_orientations[0].numpy()))
-        
 
     def random_camera_state(self):
         pos_offset = sample_pos(self.num_envs, x_range=[-0.01, 0.01],
@@ -289,7 +286,7 @@ class Controller:
         
         pos = self.default_camera_positions + pos_offset
         
-        quat = sample_quat(self.num_envs, x_range=[-0.0349, 0.0349], y_range=[1.5359, 1.6057], z_range=[-0.0349, 0.0349], device=self.device)
+        quat = sample_quat(self.num_envs, x_range=[-3.1765, -3.10669], y_range=[1.06465, 1.13446], z_range=[3.10669, 3.1765], device=self.device)
 
         self.cameras.set_world_poses(positions=pos, orientations=quat)
 
@@ -328,6 +325,7 @@ class Controller:
     
     def forward(self, feature, deterministic):
         self.action = self._compute_action(feature, deterministic)
+        #print(self.action)
         self.target_joint_pos = self.action * self._action_scale + self.robots.get_joint_positions()
         
         action = ArticulationActions(joint_positions=self.target_joint_pos)

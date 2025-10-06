@@ -118,7 +118,7 @@ while simulation_app.is_running():
     for _ in range(12):
         my_world.step(render=True)
     
-    for i in range(20):
+    for i in range(50):
         state_obs = controller.get_state_obs()
         frame_obs = controller.get_camera_obs()
 
@@ -131,7 +131,6 @@ while simulation_app.is_running():
 
         for _ in range(4):
             my_world.step(render=True)
-
     
 
 simulation_app.close()
