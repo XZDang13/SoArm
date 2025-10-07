@@ -127,7 +127,7 @@ for e in range(epoch):
     for _ in range(12):
         my_world.step(render=True)
     
-    for i in range(30):
+    for i in range(40):
         lights.set_lights()
         materails.apply_random_color(num_envs)
 
@@ -139,7 +139,7 @@ for e in range(epoch):
         state_obs = controller.get_state_obs()
         state_feature = controller.get_state_feature(state_obs)
 
-        deterministic = (e >= (0.75*epoch) )
+        deterministic = (e >= (0.8*epoch) )
 
         controller.forward(state_feature, deterministic)
 

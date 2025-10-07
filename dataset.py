@@ -20,7 +20,7 @@ class PairDataset(Dataset):
             v2.ToImage(),
             #v2.ColorJitter(brightness=0.2),
             #v2.CenterCrop((480, 480)),
-            v2.Resize((112, 112)),
+            v2.Resize((224, 224)),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ])

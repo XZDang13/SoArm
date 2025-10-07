@@ -25,7 +25,7 @@ class SO_ARM_101_BASE_ENV(DirectRLEnvCfg):
     action_space = 6
     state_space = 0
 
-    action_scale = 0.2
+    action_scale = 0.1
 
     is_training = True
     debug = True

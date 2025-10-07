@@ -143,16 +143,16 @@ class Controller:
             self.actor.eval()
 
         if frame_encoder_path is not None:
-            self.frame_encoder = FrameObservationEncoderNet(128).to(self.device)
+            self.frame_encoder = MobileFrameObservationEncoderNet(128).to(self.device)
             frame_encoder_params, _, _ = torch.load("frame_model.pth")
             self.frame_encoder.load_state_dict(frame_encoder_params)
             self.frame_encoder.eval()
 
-        self._action_scale = 0.2
+        self._action_scale = 0.1
 
         self.transform = v2.Compose([
             v2.ToImage(),
-            v2.Resize((112, 112)),
+            v2.Resize((224, 224)),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ])
