@@ -100,7 +100,7 @@ class PolicyController:
     def __init__(self):
         self.device = torch.device("cuda:0")
 
-        self.frame_encoder = FrameObservationEncoderNet(128).to(self.device)
+        self.frame_encoder = MobileFrameObservationEncoderNet(128).to(self.device)
         self.actor = StochasticDDPGActor(256, [256, 256], 6).to(self.device)
 
         frame_encoder_params, actor_params, _ = torch.load("frame_model.pth")
@@ -109,11 +109,11 @@ class PolicyController:
         self.frame_encoder.eval()
         self.actor.eval()
 
-        self._action_scale = 0.2
+        self._action_scale = 0.1
 
         self.transform = v2.Compose([
             v2.ToImage(),
-            v2.Resize((112, 112)),
+            v2.Resize((224, 224)),
             v2.ToDtype(torch.float32, scale=True),
             v2.Normalize((0.485, 0.456, 0.406), (0.229, 0.224, 0.225)),
         ])
@@ -155,7 +155,7 @@ class PolicyController:
 def main():
     camera = OpenCVCamera(
         OpenCVCameraConfig(
-            index_or_path="/dev/video0",
+            index_or_path="/dev/video6",
             fps=30,
             width=640,
             height=480,

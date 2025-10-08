@@ -102,11 +102,11 @@ keyboard_sub = input_interface.subscribe_to_keyboard_events(
     keyboard, on_key_event
 )
 
-action = ArticulationActions(joint_positions=np.array([[0.42118055, 0.29843212, 0.18949289, 1.56274096, 0.79019302, 0.35297226]]))
+#action = ArticulationActions(joint_positions=np.array([[0.42118055, 0.29843212, 0.18949289, 1.56274096, 0.79019302, 0.35297226]]))
 
 while simulation_app.is_running():
     
-    robots.apply_action(action)
+    #robots.apply_action(action)
     my_world.step(render=True)
 
 input_interface.unsubscribe_from_keyboard_events(keyboard, keyboard_sub)

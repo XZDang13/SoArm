@@ -5,7 +5,7 @@ from lerobot.cameras.configs import ColorMode, Cv2Rotation
 
 # Construct an `OpenCVCameraConfig` with your desired FPS, resolution, color mode, and rotation.
 config = OpenCVCameraConfig(
-    index_or_path="/dev/video0",
+    index_or_path="/dev/video6",
     fps=30,
     width=640,
     height=480,
