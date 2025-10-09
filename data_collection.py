@@ -139,7 +139,7 @@ for e in range(epoch):
         state_obs = controller.get_state_obs()
         state_feature = controller.get_state_feature(state_obs)
 
-        deterministic = (e >= (0.8*epoch) )
+        deterministic = (e >= (0.7*epoch) )
 
         controller.forward(state_feature, deterministic)
 

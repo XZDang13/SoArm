@@ -133,8 +133,8 @@ class Controller:
         self.actor = None
 
         if state_encoder_path is not None:
-            self.state_encoder = EncoderNet(6+3+4, [128, 128, 128]).to(self.device)
-            self.actor = StochasticDDPGActor(self.state_encoder.dim, [256, 256], 6).to(self.device)
+            self.state_encoder = EncoderNet(6+3+4, [256, 256, 256]).to(self.device)
+            self.actor = StochasticDDPGActor(self.state_encoder.dim, [512, 512], 6).to(self.device)
 
             state_encoder_params, actor_params, _ = torch.load("state_model.pth")
             self.state_encoder.load_state_dict(state_encoder_params)
@@ -143,7 +143,7 @@ class Controller:
             self.actor.eval()
 
         if frame_encoder_path is not None:
-            self.frame_encoder = MobileFrameObservationEncoderNet(128).to(self.device)
+            self.frame_encoder = MobileFrameObservationEncoderNet(256).to(self.device)
             frame_encoder_params, _, _ = torch.load("frame_model.pth")
             self.frame_encoder.load_state_dict(frame_encoder_params)
             self.frame_encoder.eval()
@@ -265,7 +265,7 @@ class Controller:
         
         obs = obs.to(self.device)
         feature = self.frame_encoder(obs, True)
-        feature = feature.view(-1, 256)
+        feature = feature.view(-1, 512)
 
         return feature
 
