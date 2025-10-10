@@ -116,7 +116,7 @@ for _ in range(60):
     my_world.step(render=True)
 
 controller.reset()
-epoch = 100
+epoch = 200
 #while simulation_app.is_running():
 for e in range(epoch):
     controller.reset()

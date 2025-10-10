@@ -109,7 +109,8 @@ class PolicyController:
         self.frame_encoder.eval()
         self.actor.eval()
 
-        self._action_scale = 0.1
+
+        self._action_scale = 0.05
 
         self.transform = v2.Compose([
             v2.ToImage(),
@@ -155,7 +156,7 @@ class PolicyController:
 def main():
     camera = OpenCVCamera(
         OpenCVCameraConfig(
-            index_or_path="/dev/video6",
+            index_or_path="/dev/video0",
             fps=30,
             width=640,
             height=480,

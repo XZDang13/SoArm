@@ -118,7 +118,7 @@ while simulation_app.is_running():
     for _ in range(12):
         my_world.step(render=True)
     
-    for i in range(50):
+    for i in range(40):
         state_obs = controller.get_state_obs()
 
         state_feature = controller.get_state_feature(state_obs)

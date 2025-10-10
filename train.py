@@ -46,7 +46,7 @@ class Trainer:
         set_seed_everywhere(0)
 
         self.cfg = STACK_TASK_CFG()
-        self.cfg.scene.num_envs = 512
+        self.cfg.scene.num_envs = 256
         self.env = gymnasium.make("STACK-v0", cfg=self.cfg)
 
         self.env_nums = self.cfg.scene.num_envs
@@ -56,10 +56,10 @@ class Trainer:
 
         self.device = self.env.unwrapped.device
 
-        self.encoder = EncoderNet(self.obs_dim, [256, 256, 256]).to(self.device)
-        self.actor = StochasticDDPGActor(self.encoder.dim, [512, 512], self.action_dim).to(self.device)
-        self.critic = Critic(self.encoder.dim, [512, 512], self.action_dim).to(self.device)
-        self.critic_target = Critic(self.encoder.dim, [512, 512], self.action_dim).to(self.device)
+        self.encoder = EncoderNet(self.obs_dim, [128, 128, 128]).to(self.device)
+        self.actor = StochasticDDPGActor(self.encoder.dim, [256, 256], self.action_dim).to(self.device)
+        self.critic = Critic(self.encoder.dim, [256, 256], self.action_dim).to(self.device)
+        self.critic_target = Critic(self.encoder.dim, [256, 256], self.action_dim).to(self.device)
         self.critic_target.load_state_dict(self.critic.state_dict())
 
         for param in self.critic_target.parameters():
@@ -87,9 +87,9 @@ class Trainer:
         self.epochs = 250
         self.update_iteration = 50
         self.batch_size = self.env_nums * 10
-        self.gamma = 0.95
+        self.gamma = 0.995
         self.tau = 0.005
-        self.regularization_weight = 1e-1
+        self.regularization_weight = 1
 
         self.std = 1
 
