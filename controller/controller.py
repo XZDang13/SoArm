@@ -44,6 +44,80 @@ def quat_from_euler_xyz(roll: torch.Tensor, pitch: torch.Tensor, yaw: torch.Tens
 
     return torch.stack([qw, qx, qy, qz], dim=-1)
 
+@torch.jit.script
+def quat_conjugate(q: torch.Tensor) -> torch.Tensor:
+    """Computes the conjugate of a quaternion.
+
+    Args:
+        q: The quaternion orientation in (w, x, y, z). Shape is (..., 4).
+
+    Returns:
+        The conjugate quaternion in (w, x, y, z). Shape is (..., 4).
+    """
+    shape = q.shape
+    q = q.reshape(-1, 4)
+    return torch.cat((q[..., 0:1], -q[..., 1:]), dim=-1).view(shape)
+
+@torch.jit.script
+def quat_inv(q: torch.Tensor, eps: float = 1e-9) -> torch.Tensor:
+    
+    return quat_conjugate(q) / q.pow(2).sum(dim=-1, keepdim=True).clamp(min=eps)
+
+@torch.jit.script
+def quat_mul(q1: torch.Tensor, q2: torch.Tensor) -> torch.Tensor:
+    
+    if q1.shape != q2.shape:
+        msg = f"Expected input quaternion shape mismatch: {q1.shape} != {q2.shape}."
+        raise ValueError(msg)
+    # reshape to (N, 4) for multiplication
+    shape = q1.shape
+    q1 = q1.reshape(-1, 4)
+    q2 = q2.reshape(-1, 4)
+    # extract components from quaternions
+    w1, x1, y1, z1 = q1[:, 0], q1[:, 1], q1[:, 2], q1[:, 3]
+    w2, x2, y2, z2 = q2[:, 0], q2[:, 1], q2[:, 2], q2[:, 3]
+    # perform multiplication
+    ww = (z1 + x1) * (x2 + y2)
+    yy = (w1 - y1) * (w2 + z2)
+    zz = (w1 + y1) * (w2 - z2)
+    xx = ww + yy + zz
+    qq = 0.5 * (xx + (z1 - x1) * (x2 - y2))
+    w = qq - ww + (z1 - y1) * (y2 - z2)
+    x = qq - xx + (x1 + w1) * (x2 + w2)
+    y = qq - yy + (w1 - x1) * (y2 + z2)
+    z = qq - zz + (z1 + y1) * (w2 - x2)
+
+    return torch.stack([w, x, y, z], dim=-1).view(shape)
+
+@torch.jit.script
+def quat_apply(quat: torch.Tensor, vec: torch.Tensor) -> torch.Tensor:
+    # store shape
+    shape = vec.shape
+    # reshape to (N, 3) for multiplication
+    quat = quat.reshape(-1, 4)
+    vec = vec.reshape(-1, 3)
+    # extract components from quaternions
+    xyz = quat[:, 1:]
+    t = xyz.cross(vec, dim=-1) * 2
+    return (vec + quat[:, 0:1] * t + xyz.cross(t, dim=-1)).view(shape)
+
+def subtract_frame_transforms(
+    t01: torch.Tensor, q01: torch.Tensor, t02: torch.Tensor | None = None, q02: torch.Tensor | None = None
+) -> tuple[torch.Tensor, torch.Tensor]:
+    
+    # compute orientation
+    q10 = quat_inv(q01)
+    if q02 is not None:
+        q12 = quat_mul(q10, q02)
+    else:
+        q12 = q10
+    # compute translation
+    if t02 is not None:
+        t12 = quat_apply(q10, t02 - t01)
+    else:
+        t12 = quat_apply(q10, -t01)
+    return t12, q12
+
 def sample_in_annular_sector(n,
                              r_min: float, r_max: float,
                              theta_min: float, theta_max: float,
@@ -119,11 +193,12 @@ def untile_image(tiled_img, tile_rows=8, tile_cols=8, tile_h=720, tile_w=1280):
     return tiles
 
 class Controller:
-    def __init__(self, robots, cubes, cameras, tile_rows, tile_cols,
+    def __init__(self, robots, cubes, cameras, end_effectors, tile_rows, tile_cols,
                  state_encoder_path=None, frame_encoder_path=None):
         self.robots = robots
         self.cubes = cubes
         self.cameras = cameras
+        self.end_effectors = end_effectors
         self.num_envs = len(self.robots.prims)
 
         self.device = torch.device("cuda:0")
@@ -133,7 +208,7 @@ class Controller:
         self.actor = None
 
         if state_encoder_path is not None:
-            self.state_encoder = EncoderNet(6+3+4, [128, 128, 128]).to(self.device)
+            self.state_encoder = EncoderNet(15, [128, 128, 128]).to(self.device)
             self.actor = StochasticDDPGActor(self.state_encoder.dim, [256, 256], 6).to(self.device)
 
             state_encoder_params, actor_params, _ = torch.load("state_model.pth")
@@ -148,7 +223,7 @@ class Controller:
             self.frame_encoder.load_state_dict(frame_encoder_params)
             self.frame_encoder.eval()
 
-        self._action_scale = 0.05
+        self._action_scale = 0.1
 
         self.transform = v2.Compose([
             v2.ToImage(),
@@ -179,15 +254,17 @@ class Controller:
     
     def get_state(self):
         cube_pos, cube_quat = self.get_cube_state()
-        joint_pos = self.robots.get_joint_positions()
-
-        cube_pos -= self.robots_position
+        end_effector_pos, end_effector_quat = self.get_end_effector_state()
         cube_quat = map_to_yaw_rep(cube_quat, xyzw=False)
+        joint_pos = self.robots.get_joint_positions()
+        gripper_joint_pos = joint_pos[:, -1:]
 
         current_state = torch.cat([
             cube_pos,#3
             cube_quat,#4
-            joint_pos, #6)
+            end_effector_pos,#3
+            end_effector_quat,#4
+            gripper_joint_pos
         ], dim=-1)
 
         return current_state
@@ -197,36 +274,63 @@ class Controller:
         cube_pos = cube_state.positions
         cube_quat = cube_state.orientations
 
+        cube_pos, cube_quat = subtract_frame_transforms(self.robots_position,
+                                                        self.robots_quat,
+                                                        cube_pos,
+                                                        cube_quat)
+
         return cube_pos, cube_quat
+    
+    def get_end_effector_state(self):
+        end_effector_pos, end_effector_quat = self.end_effectors.get_world_poses()
+        end_effector_pos, end_effector_quat = subtract_frame_transforms(self.robots_position,
+                                                                        self.robots_quat,
+                                                                        end_effector_pos,
+                                                                        end_effector_quat)
+        
+        return end_effector_pos, end_effector_quat
     
     def get_state_obs(self):
         cube_pos, cube_quat = self.get_cube_state()
-        joint_pos = self.robots.get_joint_positions()
+        end_effector_pos, end_effector_quat = self.get_end_effector_state()
+        joint_pos = self.robots.get_joint_positions().clone()
 
         pre_cube_pos = self.pre_cube_pos.clone()
         pre_cube_quat = self.pre_cube_quat.clone()
+        pre_end_effector_pos = self.pre_end_effector_pos.clone()
+        pre_end_effector_quat = self.pre_end_effector_quat.clone()
         pre_joint_pos = self.pre_joint_pos.clone()
 
         self.pre_cube_pos = cube_pos.clone()
         self.pre_cube_quat = cube_quat.clone()
+        self.pre_end_effector_pos = end_effector_pos.clone()
+        self.pre_end_effector_quat = end_effector_quat.clone()
         self.pre_joint_pos = joint_pos.clone()
 
-        cube_pos -= self.robots_position
         cube_quat = map_to_yaw_rep(cube_quat, xyzw=False)
-
-        pre_cube_pos -= self.robots_position
         pre_cube_quat = map_to_yaw_rep(pre_cube_quat, xyzw=False)
+
+        gripper_joint_pos = joint_pos[:, -1:]
+        pre_gripper_joint_pos = pre_joint_pos[:, -1:]
+
+        print(end_effector_pos)
+        print(pre_end_effector_pos)
+        print("--------------")
 
         current_state = torch.cat([
             cube_pos,#3
             cube_quat,#4
-            joint_pos, #6)
+            end_effector_pos,
+            end_effector_quat,
+            gripper_joint_pos
         ], dim=-1)
 
         pre_state = torch.cat([
             pre_cube_pos,
             pre_cube_quat,
-            pre_joint_pos
+            pre_end_effector_pos,
+            pre_end_effector_quat,
+            pre_gripper_joint_pos
         ], dim=-1)
 
         obs = torch.stack([current_state, pre_state], 1)
@@ -273,6 +377,8 @@ class Controller:
         self.robots.initialize()
         self.set_props()
         self.robots_position = self.robots.get_default_state().positions
+        self.robots_quat = self.robots.get_default_state().orientations
+        #self.end_effectors.initialize()
         self.cameras.initialize()
 
         camera_states = self.cameras.get_default_state()
@@ -308,8 +414,11 @@ class Controller:
         self.target_joint_pos = self.robots.get_joint_positions().clone()
         self.pre_joint_pos = self.robots.get_joint_positions().clone()
         cube_pos, cube_quat = self.get_cube_state()
+        end_effector_pos, end_effector_quat = self.get_end_effector_state()
         self.pre_cube_pos = cube_pos.clone()
         self.pre_cube_quat = cube_quat.clone()
+        self.pre_end_effector_pos = end_effector_pos.clone()
+        self.pre_end_effector_quat = end_effector_quat.clone()
         self.pre_frame = self.get_frame().copy()
 
     def _compute_action(self, feature, deterministic:bool=True) -> np.ndarray:

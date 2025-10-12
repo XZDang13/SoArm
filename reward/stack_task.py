@@ -30,7 +30,7 @@ class StackTaskReward:
         quat_align_deg = 20.0           # degrees for alignment
         quat_align_rad = quat_align_deg * torch.pi / 180.0
         quat_improve_tol = 0.01        # rad improvement considered as "rotating to"
-        move_noise_tol = 0.005          # 'moving' magnitude to consider non-jitter
+        move_noise_tol = 0.0025          # 'moving' magnitude to consider non-jitter
         open_abs_thresh = torch.pi / 4  # absolute openness considered 'open enough' pre-grasp
         open_delta = 0.003              # active opening min delta
         close_delta = 0.003             # active closing min delta

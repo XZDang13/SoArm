@@ -46,7 +46,7 @@ class Trainer:
         set_seed_everywhere(0)
 
         self.cfg = STACK_TASK_CFG()
-        self.cfg.scene.num_envs = 256
+        self.cfg.scene.num_envs = 512
         self.env = gymnasium.make("STACK-v0", cfg=self.cfg)
 
         self.env_nums = self.cfg.scene.num_envs
@@ -87,9 +87,9 @@ class Trainer:
         self.epochs = 250
         self.update_iteration = 50
         self.batch_size = self.env_nums * 10
-        self.gamma = 0.995
+        self.gamma = 0.95
         self.tau = 0.005
-        self.regularization_weight = 1
+        self.regularization_weight = 1e-1
 
         self.std = 1
 

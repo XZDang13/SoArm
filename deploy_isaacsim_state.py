@@ -17,12 +17,13 @@ from isaacsim.core.utils.prims import get_prim_at_path
 from isaacsim.core.utils.types import ArticulationAction
 from isaacsim.core.utils.viewports import set_camera_view
 from isaacsim.storage.native import get_assets_root_path
-from omni.isaac.sensor import CameraView
+from isaacsim.sensors.camera import CameraView
 from isaacsim.core.utils.rotations import euler_angles_to_quat
 from isaacsim.core.utils.types import ArticulationActions
 from isaacsim.core.cloner import GridCloner
 from isaacsim.core.experimental.objects import DomeLight, DistantLight
 from isaacsim.core.experimental.materials import OmniPbrMaterial
+from isaacsim.core.simulation_manager import SimulationManager
 
 from controller.controller import Controller, RandomLights, RandomMaterials
 
@@ -67,8 +68,10 @@ cloner.clone(
     copy_from_source=True,
 )
 
-
 robots = Articulation(prim_paths_expr=["/World/env_.*/so101"], name="robot", reset_xform_properties=True)
+robots_pos, robots_quat = robots.get_local_poses()
+end_effector = XFormPrim(prim_paths_expr=["/World/env_.*/so101/gripper_link"])
+                            #translations=robots_pos, orientations=robots_quat)
 cubes = RigidPrim(prim_paths_expr=["/World/env_.*/Cube"], name="cube")
 tables = RigidPrim(prim_paths_expr=["/World/env_.*/Table"], name="table")
 color_cameras = CameraView(
@@ -92,8 +95,11 @@ table_material = OmniPbrMaterial(
     table_material_paths
 )
 
+_physics_sim_view = SimulationManager.get_physics_sim_view()
+print(_physics_sim_view)
+
 lights = RandomLights(dome_light, distant_light, assets_root_path)
-controller = Controller(robots, cubes, color_cameras, tile_rows, tile_cols, "state_model.pth")
+controller = Controller(robots, cubes, color_cameras, end_effector, tile_rows, tile_cols, "state_model.pth")
 materails = RandomMaterials(robot_material, cube_material, table_material)
 
 my_world.reset()
@@ -108,6 +114,7 @@ pre_init_state_feature = None
 pre_init_frame_feature = None
 
 controller.reset()
+
 while simulation_app.is_running():
 #for e in range(1):
     controller.reset()

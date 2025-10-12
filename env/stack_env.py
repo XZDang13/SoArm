@@ -28,10 +28,11 @@ class StackTask(DirectRLEnv):
         self.visual_marker_quat = torch.zeros(self.num_envs, 4, device=self.device)
         self.visual_marker_quat[:, 0] = 1.0
 
-        self.end_effector_pre_state = torch.zeros(self.num_envs, 7, device=self.device)
+        self.pre_end_effector_pos = torch.zeros(self.num_envs, 3, device=self.device)
+        self.pre_end_effector_quat = torch.zeros(self.num_envs, 4, device=self.device)
         self.cube_pre_state = torch.zeros(self.num_envs, 7, device=self.device)
 
-        self.goal_pos = torch.as_tensor([0.23, 0.0, 0.88], device=self.device)
+        self.goal_pos = torch.as_tensor([0.23, 0.0, 0.08], device=self.device)
         self.goal_quat = torch.as_tensor([1.0, 0.0, 0.0, 0.0], device=self.device)
 
     def _setup_scene(self):
@@ -97,34 +98,59 @@ class StackTask(DirectRLEnv):
 
         pre_cube_quat_b = map_to_yaw_rep(pre_cube_quat_b, xyzw=False)
 
-        joint_pos = self.robot.data.joint_pos.clone()
-        previous_joint_pos = self._previous_joint_pos.clone()
+        #joint_pos = self.robot.data.joint_pos.clone()
+        #previous_joint_pos = self._previous_joint_pos.clone()
+
+        end_effector_pos = self.end_effector.data.target_pos_source[:, 0, :].clone()
+        end_effector_quat = self.end_effector.data.target_quat_source[:, 0, :].clone()
+
+        pre_end_effector_pos = self.pre_end_effector_pos
+        pre_end_effector_quat = self.pre_end_effector_quat
+
+        gripper_joint_pos = self.robot.data.joint_pos[:, -1:].clone()
+        pre_gripper_joint_pos = self._previous_joint_pos[:, -1:].clone()
+
+        #print(end_effector_pos)
+        #print(pre_end_effector_pos)
+        #print("------------")
 
         if self.cfg.is_training:
-            cube_pos_noise = torch.empty_like(cube_pos_b).uniform_(-0.01, 0.01)
-            pre_cube_pos_noise = torch.empty_like(pre_cube_pos_b).uniform_(-0.01, 0.01)
-            joint_pos_noise = torch.empty_like(joint_pos).uniform_(-0.02, 0.02)
-            previous_joint_pos_noise = torch.empty_like(previous_joint_pos).uniform_(-0.02, 0.02)
+            cube_pos_noise = torch.empty_like(cube_pos_b).uniform_(-0.005, 0.005)
+            pre_cube_pos_noise = torch.empty_like(pre_cube_pos_b).uniform_(-0.005, 0.005)
+            end_effector_pos_noise = torch.empty_like(end_effector_pos).uniform_(-0.005, 0.005)
+            pre_end_effector_pos_noise = torch.empty_like(pre_end_effector_pos).uniform_(-0.005, 0.005)
+            joint_pos_noise = torch.empty_like(gripper_joint_pos).uniform_(-0.02, 0.02)
+            pre_joint_pos_noise = torch.empty_like(pre_gripper_joint_pos).uniform_(-0.02, 0.02)
 
             cube_pos_b += cube_pos_noise
             #cube_quat_b += cube_quat_noise
             pre_cube_pos_b += pre_cube_pos_noise
             #pre_cube_quat_b += pre_cube_quat_noise
-            joint_pos += joint_pos_noise
-            previous_joint_pos += previous_joint_pos_noise       
+            #joint_pos += joint_pos_noise
+            #previous_joint_pos += previous_joint_pos_noise   
+            end_effector_pos += end_effector_pos_noise
+            pre_end_effector_pos += pre_end_effector_pos_noise    
             cube_quat_b = add_quat_noise_wxyz(cube_quat_b, max_angle=0.02)
-            pre_cube_quat_b = add_quat_noise_wxyz(pre_cube_quat_b, max_angle=0.02) 
+            pre_cube_quat_b = add_quat_noise_wxyz(pre_cube_quat_b, max_angle=0.02)
+            end_effector_quat = add_quat_noise_wxyz(end_effector_quat, max_angle=0.02)
+            pre_end_effector_quat = add_quat_noise_wxyz(pre_end_effector_quat, max_angle=0.02)
+            gripper_joint_pos += joint_pos_noise
+            pre_gripper_joint_pos += pre_joint_pos_noise
 
         current_state = torch.cat([
             cube_pos_b,#3
             cube_quat_b,#4
-            joint_pos, #6)
+            end_effector_pos,#3
+            end_effector_quat,#4
+            gripper_joint_pos#1)
         ], dim=-1)
 
         pre_state = torch.cat([
             pre_cube_pos_b,
             pre_cube_quat_b,
-            previous_joint_pos
+            pre_end_effector_pos,
+            pre_end_effector_quat,
+            pre_gripper_joint_pos
         ], dim=-1)
 
         obs = torch.stack([current_state, pre_state], 1)
@@ -133,8 +159,8 @@ class StackTask(DirectRLEnv):
         #end_effector_quat = self.end_effector.data.target_quat_source[:, 0, :]
 
         self._previous_joint_pos = self.robot.data.joint_pos.clone()
-        self.end_effector_pre_state[:, :3] = self.end_effector.data.target_pos_w[:, 0, :].clone()
-        self.end_effector_pre_state[:, 3:7] = self.end_effector.data.target_quat_w[:, 0, :].clone()
+        self.pre_end_effector_pos = self.end_effector.data.target_pos_source[:, 0, :].clone()
+        self.pre_end_effector_quat = self.end_effector.data.target_quat_source[:, 0, :].clone()
         self.cube_pre_state[:, :] = self.green_cube.data.root_state_w[:, :7].clone()
 
         return {"policy": obs}
@@ -144,15 +170,23 @@ class StackTask(DirectRLEnv):
         #cube_pos_w[:, 2] += 0.1
 
         cube_quat_w = self.green_cube.data.root_state_w[:, 3:7]
-        cube_quat_w = map_to_yaw_rep(cube_quat_w, xyzw=False)
 
-        end_effector_pos_w = self.end_effector.data.target_pos_w[:, 0, :]
-        end_effector_quat_w = self.end_effector.data.target_quat_w[:, 0, :]
+        cube_pos_b, cube_quat_b = subtract_frame_transforms(
+            self.robot.data.root_state_w[:, :3], 
+            self.robot.data.root_state_w[:, 3:7], 
+            cube_pos_w, 
+            cube_quat_w
+        )
+
+        cube_quat_b = map_to_yaw_rep(cube_quat_b, xyzw=False)
+
+        end_effector_pos_w = self.end_effector.data.target_pos_source[:, 0, :]
+        end_effector_quat_w = self.end_effector.data.target_quat_source[:, 0, :]
 
         gripper_joint_pos_from = self._previous_joint_pos[:, -1]
         gripper_joint_pos_to = self.robot.data.joint_pos[:, -1]
 
-        goal_pos = self.terrain.env_origins + self.goal_pos
+        goal_pos = self.goal_pos
         goal_quat = self.goal_quat.expand_as(end_effector_quat_w)
 
         gripper_contact_force = self.gripper_contact.data.force_matrix_w[:, 0, 0, :]
@@ -164,26 +198,24 @@ class StackTask(DirectRLEnv):
         #print(torch.linalg.norm(gripper_contact_force, dim=-1))
         #print("----------------")
 
-
-
         motion_reward = StackTaskReward.compute_reward(
-            self.end_effector_pre_state[:, :3],
-            self.end_effector_pre_state[:, 3:7],
+            self.pre_end_effector_pos[:, :3],
+            self.pre_end_effector_quat[:, 3:7],
             end_effector_pos_w,
             end_effector_quat_w,
-            cube_pos_w,
-            cube_quat_w,
+            cube_pos_b,
+            cube_quat_b,
             goal_pos,
             goal_quat,
             gripper_joint_pos_from,
             gripper_joint_pos_to,
             is_gripper_jaw_touch_cube,
-            not self.cfg.is_training
+            False
         )
         
         penlty = self._joint_velocity_penalty() + self._get_action_rate_reward() + self._difference_to_default_reward()
         
-        reward = motion_reward * 2.5 + penlty * (-0.025)
+        reward = motion_reward * 5.0 + penlty * (-0.05)
         #print(motion_reward)
         #print("-----------------")
 
@@ -279,8 +311,8 @@ class StackTask(DirectRLEnv):
         self.sample_cube_state(env_ids)
 
         self._previous_joint_pos = self.robot.data.joint_pos.clone()
-        self.end_effector_pre_state[env_ids, :3] = self.end_effector.data.target_pos_w[env_ids, 0, :].clone()
-        self.end_effector_pre_state[env_ids, 3:7] = self.end_effector.data.target_quat_w[env_ids, 0, :].clone()
+        self.pre_end_effector_pos[env_ids, :] = self.end_effector.data.target_pos_w[env_ids, 0, :].clone()
+        self.pre_end_effector_quat[env_ids, :] = self.end_effector.data.target_quat_w[env_ids, 0, :].clone()
         self.cube_pre_state[env_ids, :] = self.green_cube.data.root_state_w[env_ids, :7].clone()
 
         '''

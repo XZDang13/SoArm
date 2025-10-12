@@ -67,6 +67,9 @@ class Trainer:
         for i in range(1000):
             action = self.get_action(obs_dict, True)
             #print(action)
+
+            #print(obs_dict["policy"][:, :, 7:14])
+            #print("---------------")
             
             next_obs_dict, reward, terminate, timeout, info = self.env.step(action)
             done = terminate | timeout

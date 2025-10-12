@@ -1,6 +1,15 @@
-from isaacsim import SimulationApp
+import argparse
+from isaaclab.app import AppLauncher
 
-simulation_app = SimulationApp({"headless": False})  # start the simulation app, with GUI open
+parser = argparse.ArgumentParser(description="Random agent for Isaac Lab environments.")
+# append AppLauncher cli args
+AppLauncher.add_app_launcher_args(parser)
+# parse the arguments
+args_cli = parser.parse_args()
+
+# launch omniverse app
+app_launcher = AppLauncher(args_cli)
+simulation_app = app_launcher.app
 
 import sys
 
@@ -11,9 +20,12 @@ from isaacsim.core.prims import Articulation, RigidPrim, XFormPrim
 from isaacsim.core.utils.types import ArticulationActions
 from isaacsim.core.utils.viewports import set_camera_view
 from isaacsim.storage.native import get_assets_root_path
-from omni.isaac.sensor import Camera
+from isaacsim.sensors.camera import Camera
 from isaacsim.core.utils.stage import open_stage
 import omni.appwindow
+
+from isaaclab.sensors import FrameTransformerCfg, OffsetCfg
+from isaaclab.sensors import FrameTransformer
 
 from PIL import Image
 
@@ -49,6 +61,20 @@ set_camera_view(
 robots = Articulation(prim_paths_expr=["/World/env_.*/so101"], name="robot", reset_xform_properties=True)
 cubes = RigidPrim(prim_paths_expr=["/World/env_.*/Cube"], name="cube")
 tables = RigidPrim(prim_paths_expr=["/World/env_.*/Table"], name="table")
+
+end_effector_cfg: FrameTransformerCfg = FrameTransformerCfg(
+    prim_path="/World/env_.*/so101/base_link",
+    debug_vis=False,
+    target_frames=[
+        FrameTransformerCfg.FrameCfg(
+            prim_path="/World/env_.*/so101/gripper_link",
+            name="tcp",
+            offset=OffsetCfg((0.02, 0.0, -0.095))
+        )
+    ]
+)
+
+end_effector = FrameTransformer(end_effector_cfg)
 
 color_camera = Camera(
     prim_path="/World/env_0/Camera",
