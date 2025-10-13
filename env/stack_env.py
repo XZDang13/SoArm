@@ -40,7 +40,8 @@ class StackTask(DirectRLEnv):
         self.robot = Articulation(self.cfg.robot)
         self.green_cube = RigidObject(self.cfg.green_cube)
         #self.red_cube = RigidObject(self.cfg.red_cube)
-        self.end_effector = FrameTransformer(self.cfg.end_effector)
+        self.end_effector_tcp = FrameTransformer(self.cfg.end_effector_tcp)
+        self.end_effector_base = FrameTransformer(self.cfg.end_effector_base)
         self.gripper_contact = ContactSensor(self.cfg.gripper_contact)
         self.jaw_contact = ContactSensor(self.cfg.jaw_contact)
 
@@ -48,7 +49,8 @@ class StackTask(DirectRLEnv):
         self.scene.articulations["robot"] = self.robot
         self.scene.rigid_objects["green_cube"] = self.green_cube
         #self.scene.rigid_objects["red_cube"] = self.red_cube
-        self.scene.sensors["end_effector"] = self.end_effector
+        self.scene.sensors["end_effector_tcp"] = self.end_effector_tcp
+        self.scene.sensors["end_effector_base"] = self.end_effector_base
         self.scene.sensors["gripper_contact"] = self.gripper_contact
         self.scene.sensors["jaw_contact"] = self.jaw_contact
 
@@ -101,18 +103,14 @@ class StackTask(DirectRLEnv):
         #joint_pos = self.robot.data.joint_pos.clone()
         #previous_joint_pos = self._previous_joint_pos.clone()
 
-        end_effector_pos = self.end_effector.data.target_pos_source[:, 0, :].clone()
-        end_effector_quat = self.end_effector.data.target_quat_source[:, 0, :].clone()
+        end_effector_pos = self.end_effector_base.data.target_pos_source[:, 0, :].clone()
+        end_effector_quat = self.end_effector_base.data.target_quat_source[:, 0, :].clone()
 
         pre_end_effector_pos = self.pre_end_effector_pos
         pre_end_effector_quat = self.pre_end_effector_quat
 
         gripper_joint_pos = self.robot.data.joint_pos[:, -1:].clone()
         pre_gripper_joint_pos = self._previous_joint_pos[:, -1:].clone()
-
-        #print(end_effector_pos)
-        #print(pre_end_effector_pos)
-        #print("------------")
 
         if self.cfg.is_training:
             cube_pos_noise = torch.empty_like(cube_pos_b).uniform_(-0.005, 0.005)
@@ -159,8 +157,8 @@ class StackTask(DirectRLEnv):
         #end_effector_quat = self.end_effector.data.target_quat_source[:, 0, :]
 
         self._previous_joint_pos = self.robot.data.joint_pos.clone()
-        self.pre_end_effector_pos = self.end_effector.data.target_pos_source[:, 0, :].clone()
-        self.pre_end_effector_quat = self.end_effector.data.target_quat_source[:, 0, :].clone()
+        self.pre_end_effector_pos = self.end_effector_base.data.target_pos_source[:, 0, :].clone()
+        self.pre_end_effector_quat = self.end_effector_base.data.target_quat_source[:, 0, :].clone()
         self.cube_pre_state[:, :] = self.green_cube.data.root_state_w[:, :7].clone()
 
         return {"policy": obs}
@@ -180,8 +178,8 @@ class StackTask(DirectRLEnv):
 
         cube_quat_b = map_to_yaw_rep(cube_quat_b, xyzw=False)
 
-        end_effector_pos_w = self.end_effector.data.target_pos_source[:, 0, :]
-        end_effector_quat_w = self.end_effector.data.target_quat_source[:, 0, :]
+        end_effector_pos_w = self.end_effector_tcp.data.target_pos_source[:, 0, :]
+        end_effector_quat_w = self.end_effector_tcp.data.target_quat_source[:, 0, :]
 
         gripper_joint_pos_from = self._previous_joint_pos[:, -1]
         gripper_joint_pos_to = self.robot.data.joint_pos[:, -1]
@@ -215,7 +213,7 @@ class StackTask(DirectRLEnv):
         
         penlty = self._joint_velocity_penalty() + self._get_action_rate_reward() + self._difference_to_default_reward()
         
-        reward = motion_reward * 5.0 + penlty * (-0.05)
+        reward = motion_reward * 5.0 + penlty * (-0.025)
         #print(motion_reward)
         #print("-----------------")
 
@@ -311,9 +309,12 @@ class StackTask(DirectRLEnv):
         self.sample_cube_state(env_ids)
 
         self._previous_joint_pos = self.robot.data.joint_pos.clone()
-        self.pre_end_effector_pos[env_ids, :] = self.end_effector.data.target_pos_w[env_ids, 0, :].clone()
-        self.pre_end_effector_quat[env_ids, :] = self.end_effector.data.target_quat_w[env_ids, 0, :].clone()
+        self.pre_end_effector_pos[env_ids, :] = self.end_effector_base.data.target_pos_source[env_ids, 0, :].clone()
+        self.pre_end_effector_quat[env_ids, :] = self.end_effector_base.data.target_quat_source[env_ids, 0, :].clone()
         self.cube_pre_state[env_ids, :] = self.green_cube.data.root_state_w[env_ids, :7].clone()
+
+        #print(self.pre_end_effector_pos)
+        #print(self.pre_end_effector_quat)
 
         '''
         cube_pos_w = self.cube.data.root_state_w[env_ids, :3]

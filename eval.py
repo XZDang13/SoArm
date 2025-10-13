@@ -28,7 +28,7 @@ from model.actor_critic import EncoderNet, StochasticDDPGActor
 class Trainer:
     def __init__(self):
         cfg = STACK_TASK_CFG()
-        cfg.scene.num_envs = 4
+        cfg.scene.num_envs = 1
         cfg.is_training = False
         self.env = gymnasium.make("STACK-v0", cfg=cfg)
 
@@ -67,6 +67,8 @@ class Trainer:
         for i in range(1000):
             action = self.get_action(obs_dict, True)
             #print(action)
+            #print(self.env.unwrapped.end_effector_base.data.target_pos_source[:, 0, :])
+            #print(self.env.unwrapped.end_effector_tcp.data.target_pos_source[:, 0, :])
 
             #print(obs_dict["policy"][:, :, 7:14])
             #print("---------------")

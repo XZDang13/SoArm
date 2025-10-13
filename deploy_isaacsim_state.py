@@ -70,8 +70,7 @@ cloner.clone(
 
 robots = Articulation(prim_paths_expr=["/World/env_.*/so101"], name="robot", reset_xform_properties=True)
 robots_pos, robots_quat = robots.get_local_poses()
-end_effector = XFormPrim(prim_paths_expr=["/World/env_.*/so101/gripper_link"])
-                            #translations=robots_pos, orientations=robots_quat)
+end_effector = RigidPrim(prim_paths_expr=["/World/env_.*/so101/gripper_link"])
 cubes = RigidPrim(prim_paths_expr=["/World/env_.*/Cube"], name="cube")
 tables = RigidPrim(prim_paths_expr=["/World/env_.*/Table"], name="table")
 color_cameras = CameraView(
@@ -126,6 +125,8 @@ while simulation_app.is_running():
         my_world.step(render=True)
     
     for i in range(40):
+        print(controller.get_end_effector_state())
+        print("----------------")
         state_obs = controller.get_state_obs()
 
         state_feature = controller.get_state_feature(state_obs)

@@ -59,7 +59,7 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
         ),
     )
 
-    end_effector: FrameTransformerCfg = FrameTransformerCfg(
+    end_effector_tcp: FrameTransformerCfg = FrameTransformerCfg(
         prim_path="/World/envs/env_.*/Robot/base_link",
         debug_vis=True,
         visualizer_cfg=FRAME_MARKER_SMALL_CFG.replace(prim_path="/Visuals/EndEffectorFrameTransformer"),
@@ -68,7 +68,19 @@ class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
                 prim_path="/World/envs/env_.*/Robot/gripper_link",
                 name="tcp",
                 offset=OffsetCfg((0.02, 0.0, -0.095))
-            )
+            ),
+        ]
+    )
+
+    end_effector_base: FrameTransformerCfg = FrameTransformerCfg(
+        prim_path="/World/envs/env_.*/Robot/base_link",
+        debug_vis=True,
+        visualizer_cfg=FRAME_MARKER_SMALL_CFG.replace(prim_path="/Visuals/EndEffectorFrameTransformer"),
+        target_frames=[
+            FrameTransformerCfg.FrameCfg(
+                prim_path="/World/envs/env_.*/Robot/gripper_link",
+                name="gripper"
+            ),
         ]
     )
 

@@ -313,10 +313,6 @@ class Controller:
         gripper_joint_pos = joint_pos[:, -1:]
         pre_gripper_joint_pos = pre_joint_pos[:, -1:]
 
-        print(end_effector_pos)
-        print(pre_end_effector_pos)
-        print("--------------")
-
         current_state = torch.cat([
             cube_pos,#3
             cube_quat,#4
@@ -378,7 +374,7 @@ class Controller:
         self.set_props()
         self.robots_position = self.robots.get_default_state().positions
         self.robots_quat = self.robots.get_default_state().orientations
-        #self.end_effectors.initialize()
+        self.end_effectors.initialize()
         self.cameras.initialize()
 
         camera_states = self.cameras.get_default_state()
