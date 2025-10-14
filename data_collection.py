@@ -82,6 +82,7 @@ cloner.clone(
 
 
 robots = Articulation(prim_paths_expr=["/World/env_.*/so101"], name="robot", reset_xform_properties=True)
+end_effector = RigidPrim(prim_paths_expr=["/World/env_.*/so101/gripper_link"])
 cubes = RigidPrim(prim_paths_expr=["/World/env_.*/Cube"], name="cube")
 tables = RigidPrim(prim_paths_expr=["/World/env_.*/Table"], name="table")
 color_cameras = CameraView(
@@ -106,7 +107,7 @@ table_material = OmniPbrMaterial(
 )
 
 lights = RandomLights(dome_light, distant_light, assets_root_path)
-controller = Controller(robots, cubes, color_cameras, tile_rows, tile_cols, "state_model.pth")
+controller = Controller(robots, cubes, color_cameras, end_effector, tile_rows, tile_cols, "state_model.pth")
 materails = RandomMaterials(robot_material, cube_material, table_material)
 
 my_world.reset()
@@ -116,7 +117,7 @@ for _ in range(60):
     my_world.step(render=True)
 
 controller.reset()
-epoch = 200
+epoch = 100
 #while simulation_app.is_running():
 for e in range(epoch):
     controller.reset()

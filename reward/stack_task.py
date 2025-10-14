@@ -110,6 +110,7 @@ class StackTaskReward:
         if is_debug:
             print(target_pos)
             print(reward)
+            print(is_moving)
             print(is_gripper_moving_to_target)
             print(is_gripper_above_target)
             print("-----------------")

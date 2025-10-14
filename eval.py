@@ -67,7 +67,7 @@ class Trainer:
         for i in range(1000):
             action = self.get_action(obs_dict, True)
             #print(action)
-            #print(self.env.unwrapped.end_effector_base.data.target_pos_source[:, 0, :])
+            #print(self.env.unwrapped.end_effector.data.target_pos_source[:, :, :])
             #print(self.env.unwrapped.end_effector_tcp.data.target_pos_source[:, 0, :])
 
             #print(obs_dict["policy"][:, :, 7:14])
