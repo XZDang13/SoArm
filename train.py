@@ -89,7 +89,7 @@ class Trainer:
         self.batch_size = self.env_nums * 10
         self.gamma = 0.95
         self.tau = 0.005
-        self.regularization_weight = 1e-3
+        self.regularization_weight = 1e-2
 
         self.std = 1
 

@@ -219,9 +219,11 @@ class Controller:
 
         if frame_encoder_path is not None:
             self.frame_encoder = MobileFrameObservationEncoderNet(128).to(self.device)
-            frame_encoder_params, _, _ = torch.load("frame_model.pth")
+            frame_encoder_params, actor_params, _ = torch.load("frame_model.pth")
             self.frame_encoder.load_state_dict(frame_encoder_params)
             self.frame_encoder.eval()
+            self.actor.load_state_dict(actor_params)
+            self.actor.eval()
 
         self._action_scale = 0.1
 

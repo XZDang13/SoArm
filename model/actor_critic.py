@@ -110,15 +110,74 @@ class MobileFrameObservationEncoderNet(nn.Module):
 
         self.dim = feature_dim
         
-        self.visual_encoder = torch.hub.load('pytorch/vision:v0.10.0', 'mobilenet_v3_large', pretrained=True)
+        self.visual_encoder = torch.hub.load('pytorch/vision', 'mobilenet_v3_large', pretrained=True)
         self.visual_encoder.classifier = nn.Identity()
         self.mlp_layer = nn.Sequential(
             MLPLayer(960, feature_dim, nn.Identity(), True),
         )
+
+    def get_features(self, x:torch.Tensor) -> torch.Tensor:
+        x = self.visual_encoder(x)
+        x = self.mlp_layer(x)
+
+        return x
         
     def forward(self, x:torch.Tensor, with_act_func:bool=True, aug:bool=False) -> torch.Tensor:
 
         x = self.visual_encoder(x)
+        x = self.mlp_layer(x)
+        if with_act_func:
+            x = F.silu(x)
+        return x
+    
+class EfficientNetFrameObservationEncoderNet(nn.Module):
+    def __init__(self, feature_dim:int):
+        super().__init__()
+
+        self.dim = feature_dim
+        
+        self.visual_encoder = torch.hub.load("pytorch/vision", "efficientnet_v2_s", weights="IMAGENET1K_V1")
+        self.visual_encoder.classifier = nn.Identity()
+        self.mlp_layer = nn.Sequential(
+            MLPLayer(1280, feature_dim, nn.Identity(), True),
+        )
+
+    def get_features(self, x:torch.Tensor) -> torch.Tensor:
+        x = self.visual_encoder(x)
+        x = self.mlp_layer(x)
+
+        return x
+        
+    def forward(self, x:torch.Tensor, with_act_func:bool=True, aug:bool=False) -> torch.Tensor:
+
+        x = self.visual_encoder(x)
+        x = self.mlp_layer(x)
+        if with_act_func:
+            x = F.silu(x)
+        return x
+
+class DinoFrameObservationEncoderNet(nn.Module):
+    def __init__(self, feature_dim:int):
+        super().__init__()
+
+        self.dim = feature_dim
+        
+        self.visual_encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14_reg').eval()
+        self.mlp_layer = nn.Sequential(
+            MLPLayer(384, 1024, nn.SiLU(), True),
+            MLPLayer(1024, feature_dim, nn.Identity(), True),
+        )
+
+    def get_features(self, x:torch.Tensor) -> torch.Tensor:
+        with torch.no_grad():
+            x = self.visual_encoder(x)
+        x = self.mlp_layer(x)
+
+        return x
+        
+    def forward(self, x:torch.Tensor, with_act_func:bool=True, aug:bool=False) -> torch.Tensor:
+        with torch.no_grad():
+            x = self.visual_encoder(x)
         x = self.mlp_layer(x)
         if with_act_func:
             x = F.silu(x)

@@ -110,7 +110,7 @@ class PolicyController:
         self.actor.eval()
 
 
-        self._action_scale = 0.05
+        self._action_scale = 0.1
 
         self.transform = v2.Compose([
             v2.ToImage(),

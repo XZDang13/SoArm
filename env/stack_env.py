@@ -70,6 +70,9 @@ class StackTask(DirectRLEnv):
 
     def _pre_physics_step(self, actions: torch.Tensor):
         self._actions = actions.clone()
+        if self.cfg.is_training:
+            action_noise = torch.zeros_like(actions).uniform_(-0.1, 0.1)
+            self._actions += action_noise
         self._joint_target_pos = self.cfg.action_scale * self._actions + self.robot.data.joint_pos
 
     def _apply_action(self):
@@ -115,10 +118,10 @@ class StackTask(DirectRLEnv):
         pre_gripper_joint_pos = self._previous_joint_pos[:, -1:].clone()
 
         if self.cfg.is_training:
-            cube_pos_noise = torch.empty_like(cube_pos_b).uniform_(-0.005, 0.005)
-            pre_cube_pos_noise = torch.empty_like(pre_cube_pos_b).uniform_(-0.005, 0.005)
-            end_effector_pos_noise = torch.empty_like(end_effector_pos).uniform_(-0.005, 0.005)
-            pre_end_effector_pos_noise = torch.empty_like(pre_end_effector_pos).uniform_(-0.005, 0.005)
+            cube_pos_noise = torch.empty_like(cube_pos_b).uniform_(-0.01, 0.01)
+            pre_cube_pos_noise = torch.empty_like(pre_cube_pos_b).uniform_(-0.01, 0.01)
+            end_effector_pos_noise = torch.empty_like(end_effector_pos).uniform_(-0.01, 0.01)
+            pre_end_effector_pos_noise = torch.empty_like(pre_end_effector_pos).uniform_(-0.01, 0.01)
             joint_pos_noise = torch.empty_like(gripper_joint_pos).uniform_(-0.02, 0.02)
             pre_joint_pos_noise = torch.empty_like(pre_gripper_joint_pos).uniform_(-0.02, 0.02)
 
@@ -130,10 +133,10 @@ class StackTask(DirectRLEnv):
             #previous_joint_pos += previous_joint_pos_noise   
             end_effector_pos += end_effector_pos_noise
             pre_end_effector_pos += pre_end_effector_pos_noise    
-            cube_quat_b = add_quat_noise_wxyz(cube_quat_b, max_angle=0.02)
-            pre_cube_quat_b = add_quat_noise_wxyz(pre_cube_quat_b, max_angle=0.02)
-            end_effector_quat = add_quat_noise_wxyz(end_effector_quat, max_angle=0.02)
-            pre_end_effector_quat = add_quat_noise_wxyz(pre_end_effector_quat, max_angle=0.02)
+            cube_quat_b = add_quat_noise_wxyz(cube_quat_b, max_angle=0.05)
+            pre_cube_quat_b = add_quat_noise_wxyz(pre_cube_quat_b, max_angle=0.05)
+            end_effector_quat = add_quat_noise_wxyz(end_effector_quat, max_angle=0.05)
+            pre_end_effector_quat = add_quat_noise_wxyz(pre_end_effector_quat, max_angle=0.05)
             gripper_joint_pos += joint_pos_noise
             pre_gripper_joint_pos += pre_joint_pos_noise
 
