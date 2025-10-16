@@ -225,7 +225,7 @@ class Controller:
             self.actor.load_state_dict(actor_params)
             self.actor.eval()
 
-        self._action_scale = 0.1
+        self._action_scale = 0.075
 
         self.transform = v2.Compose([
             v2.ToImage(),

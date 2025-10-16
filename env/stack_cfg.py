@@ -37,7 +37,7 @@ class EventCfg:
 
 @configclass
 class STACK_TASK_CFG(SO_ARM_101_BASE_ENV):
-    episode_length_s = 2.5
+    episode_length_s = 3.5
     
     observation_space = 15
     state_space = 2

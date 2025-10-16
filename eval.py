@@ -66,7 +66,7 @@ class Trainer:
         obs_dict, info = self.env.reset()
         for i in range(1000):
             action = self.get_action(obs_dict, True)
-            #print(action)
+            print(action)
             #print(self.env.unwrapped.end_effector.data.target_pos_source[:, :, :])
             #print(self.env.unwrapped.end_effector_tcp.data.target_pos_source[:, 0, :])
 
