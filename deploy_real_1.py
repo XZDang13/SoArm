@@ -100,8 +100,8 @@ class PolicyController:
     def __init__(self):
         self.device = torch.device("cuda:0")
 
-        self.frame_encoder = MobileFrameObservationEncoderNet(128).to(self.device)
-        self.actor = StochasticDDPGActor(256, [256, 256], 6).to(self.device)
+        self.frame_encoder = MobileFrameObservationEncoderNet(512).to(self.device)
+        self.actor = StochasticDDPGActor(1024, [512, 512], 6).to(self.device)
 
         frame_encoder_params, actor_params, _ = torch.load("frame_model.pth")
         self.frame_encoder.load_state_dict(frame_encoder_params)
@@ -131,7 +131,7 @@ class PolicyController:
         frames = torch.stack(self.transform(frames), dim=0).to(self.device)
 
         features = self.frame_encoder(frames, True)
-        features = features.view(-1, 256)
+        features = features.view(-1, 1024)
 
         self.pre_frame = frame.copy()
 

@@ -12,7 +12,7 @@ from isaacsim.core.utils.rotations import quat_to_euler_angles
 from isaacsim.core.api.materials import OmniPBR
 from PIL import Image
 
-from model.actor_critic import EncoderNet, MobileFrameObservationEncoderNet, StochasticDDPGActor, FrameObservationEncoderNet
+from model.actor_critic import EncoderNet, StochasticDDPGActor, MobileFrameObservationEncoderNet
 from env.utils import map_to_yaw_rep
 
 @torch.jit.script
@@ -208,8 +208,8 @@ class Controller:
         self.actor = None
 
         if state_encoder_path is not None:
-            self.state_encoder = EncoderNet(15, [128, 128, 128]).to(self.device)
-            self.actor = StochasticDDPGActor(self.state_encoder.dim, [256, 256], 6).to(self.device)
+            self.state_encoder = EncoderNet(15, [64, 64, 64]).to(self.device)
+            self.actor = StochasticDDPGActor(self.state_encoder.dim, [128, 128], 6).to(self.device)
 
             state_encoder_params, actor_params, _ = torch.load("state_model.pth")
             self.state_encoder.load_state_dict(state_encoder_params)
@@ -218,14 +218,14 @@ class Controller:
             self.actor.eval()
 
         if frame_encoder_path is not None:
-            self.frame_encoder = MobileFrameObservationEncoderNet(128).to(self.device)
+            self.frame_encoder = MobileFrameObservationEncoderNet(512).to(self.device)
             frame_encoder_params, actor_params, _ = torch.load("frame_model.pth")
             self.frame_encoder.load_state_dict(frame_encoder_params)
             self.frame_encoder.eval()
             self.actor.load_state_dict(actor_params)
             self.actor.eval()
 
-        self._action_scale = 0.075
+        self._action_scale = 0.1
 
         self.transform = v2.Compose([
             v2.ToImage(),
@@ -367,7 +367,7 @@ class Controller:
         
         obs = obs.to(self.device)
         feature = self.frame_encoder(obs, True)
-        feature = feature.view(-1, 256)
+        feature = feature.view(-1, 128)
 
         return feature
 
@@ -401,7 +401,8 @@ class Controller:
         cube_pos = self.robots_position.clone()
         cube_pos[:, 0] += cube_offset_x
         cube_pos[:, 1] += cube_offset_y
-        cube_pos[:, 2] += 0.01
+        cube_pos[:, 2] += 0.025
+        
 
         cube_quat = sample_quat(self.num_envs, z_range=[-torch.pi/4, torch.pi/4], device=self.device)
 

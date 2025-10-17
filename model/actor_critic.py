@@ -81,7 +81,7 @@ class FrameObservationEncoderNet(nn.Module):
         
         self.dim = feature_dim
 
-        self.cnn_layers = nn.Sequential(
+        self.visual_encoder = nn.Sequential(
             Conv2DLayer(3, 64, 3, 2, 1, F.silu, True),
             Conv2DLayer(64, 128, 3, 2, 1, F.silu, True),
             Conv2DLayer(128, 256, 3, 2, 1, F.silu, True),
@@ -92,11 +92,19 @@ class FrameObservationEncoderNet(nn.Module):
             MLPLayer(512*7*7, feature_dim, nn.Identity(), True),
             #MLPLayer(1024, feature_dim, F.silu, True),
         )
+
+    def get_features(self, x:torch.Tensor) -> torch.Tensor:
+        x = self.aug(x)
+        x = self.visual_encoder(x)
+        x = x.flatten(1)
+        x = self.mlp_layer(x)
+
+        return x
         
     def forward(self, x:torch.Tensor, with_act_func:bool=True, aug:bool=False) -> torch.Tensor:
         if aug:
             x = self.aug(x)
-        x = self.cnn_layers(x)
+        x = self.visual_encoder(x)
         #x = F.avg_pool2d(x, 7)
         x = x.flatten(1)
         x = self.mlp_layer(x)
@@ -162,22 +170,21 @@ class DinoFrameObservationEncoderNet(nn.Module):
 
         self.dim = feature_dim
         
-        self.visual_encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14_reg').eval()
+        self.visual_encoder = torch.hub.load('facebookresearch/dinov2', 'dinov2_vits14_reg')
         self.mlp_layer = nn.Sequential(
             MLPLayer(384, 1024, nn.SiLU(), True),
             MLPLayer(1024, feature_dim, nn.Identity(), True),
         )
 
     def get_features(self, x:torch.Tensor) -> torch.Tensor:
-        with torch.no_grad():
-            x = self.visual_encoder(x)
+        
+        x = self.visual_encoder(x)
         x = self.mlp_layer(x)
 
         return x
         
     def forward(self, x:torch.Tensor, with_act_func:bool=True, aug:bool=False) -> torch.Tensor:
-        with torch.no_grad():
-            x = self.visual_encoder(x)
+        x = self.visual_encoder(x)
         x = self.mlp_layer(x)
         if with_act_func:
             x = F.silu(x)

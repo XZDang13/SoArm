@@ -13,6 +13,8 @@ class PairDataset(Dataset):
 
         self.data_path = data_path
         self.files = glob.glob(f"{data_path}/json/*.json")
+        #random.shuffle(self.files)
+        #self.files = self.files[:100000]
 
         #self.to_over_lay = Image.open("real.png").convert("RGBA")
 
@@ -53,6 +55,6 @@ class PairDataset(Dataset):
 
 def get_dataloader():
     dataset = PairDataset("replays")
-    dataloader = DataLoader(dataset, batch_size=512, shuffle=True, num_workers=16)
+    dataloader = DataLoader(dataset, batch_size=256, shuffle=True, num_workers=16)
 
     return dataloader

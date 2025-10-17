@@ -218,7 +218,9 @@ class StackTask(DirectRLEnv):
             not self.cfg.is_training
         )
         
-        penlty = self._joint_velocity_penalty() + self._get_action_rate_reward() + self._difference_to_default_reward()
+        penlty = (self._joint_velocity_penalty() + self._get_action_rate_reward()
+                   + self._difference_to_default_reward() + self._torque_penalty()
+        )
         
         reward = motion_reward * 5.0 + penlty
 
@@ -240,7 +242,7 @@ class StackTask(DirectRLEnv):
         return -torch.sum(torch.square(self.robot.data.joint_vel), dim=1) * 0.0025
 
     def _difference_to_default_reward(self) -> torch.Tensor:
-        return -torch.sum((self.robot.data.joint_pos - self.robot.data.default_joint_pos) ** 2, dim=1) * 0.01
+        return -torch.sum((self.robot.data.joint_pos - self.robot.data.default_joint_pos) ** 2, dim=1) * 0.005
     
     def _get_dones(self) -> tuple[torch.Tensor, torch.Tensor]:
         terminated = torch.zeros(self.num_envs, dtype=torch.bool, device=self.device)

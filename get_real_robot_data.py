@@ -113,12 +113,12 @@ def main():
     try:
         log_say("Start", True, blocking=True)
         init_state = {
-            'shoulder_pan.pos': 24.0,
-            'shoulder_lift.pos': 15.0,
-            'elbow_flex.pos': 11.0,
+            'shoulder_pan.pos': 10.0,
+            'shoulder_lift.pos': 0.0,
+            'elbow_flex.pos': 0.0,
             'wrist_flex.pos': 90.0,
-            'wrist_roll.pos': 45.0,
-            'gripper.pos': 20.0
+            'wrist_roll.pos': 0.0,
+            'gripper.pos': 0.0
         }
 
         move_to_state(robot, init_state)
@@ -130,6 +130,8 @@ def main():
 
             color_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
             cv2.imshow(win_name, color_bgr)
+
+            print(robot.bus.sync_read("Present_Position", normalize=True))
 
             key = cv2.waitKey(1) & 0xFF
             if key == 27:
